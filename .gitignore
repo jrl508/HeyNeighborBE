@@ -1,0 +1,36 @@
+# Node dependencies
+node_modules/
+
+# Environment variables
+.env
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Transpiled or built files
+dist/
+build/
+
+# Temporary files
+*.swp
+*.tmp
+*.temp
+*.bak
+*.orig
+
+# IDE/Editor specific
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Debugging tools
+debug/
