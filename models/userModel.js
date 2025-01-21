@@ -25,6 +25,13 @@ const createUser = async (user) => {
   return db("users").insert(user).returning("*"); // Insert new user into database
 };
 
+//Update User personal information
+const updateUserProfile = async (userId, updatedFields) => {
+  await db("users")
+    .where({ id: userId })
+    .update({ ...updatedFields });
+};
+
 const updateUserProfilePicture = async (userId, filePath) => {
   await db("users").where({ id: userId }).update({ profile_image: filePath });
 };
@@ -32,6 +39,7 @@ const updateUserProfilePicture = async (userId, filePath) => {
 module.exports = {
   getUserByEmail,
   createUser,
+  updateUserProfile,
   updateUserProfilePicture,
   getUserById,
 };

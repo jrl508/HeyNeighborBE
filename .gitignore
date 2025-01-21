@@ -34,3 +34,5 @@ build/
 
 # Debugging tools
 debug/
+
+uploads/

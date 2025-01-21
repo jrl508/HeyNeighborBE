@@ -3,6 +3,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/userModel");
 const { validationResult } = require("express-validator"); // For input validation
 const { uploadSingle } = require("../middleware/fileUploadMiddleware");
+const { use } = require("../routes/authRoutes");
 // Register User
 const registerUser = async (req, res) => {
   // Check for validation errors
@@ -71,7 +72,10 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
-
+    console.log("LOGIN SUCCESSFUL");
+    console.dir(user);
+    const { first_name, last_name, profile_image, phone_number, location } =
+      user;
     // Generate JWT token
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
@@ -81,14 +85,32 @@ const loginUser = async (req, res) => {
       message: "Login successful",
       token,
       user: {
-        email: user.email,
-        first_name: user.first_name,
-        last_name: user.last_name,
+        email,
+        first_name,
+        last_name,
+        profile_image,
+        phone_number,
+        location,
       },
     });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+const updateUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const { user } = req.body;
+    const updatedUser = await User.updateUserProfile(userId, user);
+    res.status(200).json({
+      message: "User Updated Successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Failed to update user profile" });
   }
 };
 
@@ -140,4 +162,10 @@ const getUserById = async (req, res) => {
   }
 };
 
-module.exports = { registerUser, loginUser, uploadProfilePic, getUserById };
+module.exports = {
+  registerUser,
+  loginUser,
+  uploadProfilePic,
+  getUserById,
+  updateUser,
+};
