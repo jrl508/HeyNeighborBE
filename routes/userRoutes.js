@@ -1,4 +1,5 @@
 const express = require("express");
+const upload = require("../middleware/fileUploadMiddleware");
 const {
   uploadProfilePic,
   getUserById,
@@ -8,7 +9,11 @@ const {
 const router = express.Router();
 
 // Route for uploading a profile picture
-router.post("/:id/profile-picture", uploadProfilePic);
+router.post(
+  "/:id/profile-picture",
+  upload.single("profile_picture"),
+  uploadProfilePic
+);
 router.get("/:id", getUserById);
 router.patch("/:id", updateUser);
 
