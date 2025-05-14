@@ -115,35 +115,29 @@ const updateUser = async (req, res) => {
 };
 
 const uploadProfilePic = async (req, res) => {
-  uploadSingle(req, res, async (err) => {
-    if (err) {
-      console.log(err);
-      return res.status(400).json({ message: err.message });
-    }
-    if (!req.file) {
-      console.log("Failed 2");
-      return res.status(400).json({ message: "No File Uploaded" });
-    }
+  if (!req.file) {
+    return res.status(400).json({ message: "No File Uploaded" });
+  }
 
-    const userId = req.params.id;
-    const profileImagePath = `${req.protocol}://${req.get("host")}/uploads/${
-      req.file.filename
-    }`;
+  const userId = req.params.id;
+  const profileImagePath = `${req.protocol}://${req.get("host")}/uploads/${
+    req.file.filename
+  }`;
 
-    try {
-      const updatedUser = await User.updateUserProfilePicture(
-        userId,
-        profileImagePath
-      );
-      res.status(200).json({
-        message: "Profile image uploaded successfully",
-        user: updatedUser,
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ message: "Error updating profile image" });
-    }
-  });
+  try {
+    const updatedUser = await User.updateUserProfilePicture(
+      userId,
+      profileImagePath
+    );
+
+    res.status(200).json({
+      message: "Profile image uploaded successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Error updating profile image" });
+  }
 };
 
 const getUserById = async (req, res) => {
