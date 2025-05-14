@@ -2,12 +2,21 @@ const Tool = require("../models/toolModel");
 
 const ToolController = {
   createTool: async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ message: "No File Uploaded" });
+    }
     try {
-      const toolData = { ...req.body, user_id: req.user.id }; // Attach user ID from the authenticated user
+      const toolImagePath = `${req.protocol}://${req.get("host")}/uploads/${
+        req.file.filename
+      }`;
+      const toolData = {
+        ...req.body,
+        user_id: req.user.id,
+        image_url: toolImagePath,
+      };
       const newTool = await Tool.create(toolData);
       res.status(201).json(newTool);
     } catch (error) {
-      console.error(error);
       res.status(500).json({ message: "Error creating tool" });
     }
   },
