@@ -29,7 +29,4 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, // Limit file size to 5MB
 });
 
-module.exports = {
-  uploadSingle: upload.single("profile_picture"), // For single file upload
-  uploadMultiple: upload.array("images", 5), // Example for multiple files
-};
+module.exports = upload;
