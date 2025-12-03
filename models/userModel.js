@@ -27,9 +27,19 @@ const createUser = async (user) => {
 
 //Update User personal information
 const updateUserProfile = async (userId, updatedFields) => {
-  await db("users")
+  return db("users")
     .where({ id: userId })
-    .update({ ...updatedFields });
+    .update({ ...updatedFields })
+    .returning([
+      "id",
+      "email",
+      "first_name",
+      "last_name",
+      "phone_number",
+      "location",
+      "updated_at",
+      "profile_image",
+    ]);
 };
 
 const updateUserProfilePicture = async (userId, filePath) => {
