@@ -74,7 +74,7 @@ const loginUser = async (req, res) => {
     }
     console.log("LOGIN SUCCESSFUL");
     console.dir(user);
-    const { first_name, last_name, profile_image, phone_number, location } =
+    const { id, first_name, last_name, profile_image, phone_number, location } =
       user;
     // Generate JWT token
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
@@ -85,6 +85,7 @@ const loginUser = async (req, res) => {
       message: "Login successful",
       token,
       user: {
+        id,
         email,
         first_name,
         last_name,
@@ -103,7 +104,8 @@ const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
     const { user } = req.body;
-    const updatedUser = await User.updateUserProfile(userId, user);
+    const data = await User.updateUserProfile(userId, user);
+    const updatedUser = data[0];
     res.status(200).json({
       message: "User Updated Successfully",
       user: updatedUser,
