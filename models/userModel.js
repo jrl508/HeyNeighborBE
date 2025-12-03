@@ -43,7 +43,10 @@ const updateUserProfile = async (userId, updatedFields) => {
 };
 
 const updateUserProfilePicture = async (userId, filePath) => {
-  await db("users").where({ id: userId }).update({ profile_image: filePath });
+  return db("users")
+    .where({ id: userId })
+    .update({ profile_image: filePath })
+    .returning("profile_image");
 };
 
 module.exports = {

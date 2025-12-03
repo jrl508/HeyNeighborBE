@@ -127,11 +127,8 @@ const uploadProfilePic = async (req, res) => {
   }`;
 
   try {
-    const updatedUser = await User.updateUserProfilePicture(
-      userId,
-      profileImagePath
-    );
-
+    const data = await User.updateUserProfilePicture(userId, profileImagePath);
+    const updatedUser = data[0];
     res.status(200).json({
       message: "Profile image uploaded successfully",
       user: updatedUser,
