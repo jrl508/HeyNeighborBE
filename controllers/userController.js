@@ -4,6 +4,8 @@ const User = require("../models/userModel");
 const { validationResult } = require("express-validator"); // For input validation
 const { uploadSingle } = require("../middleware/fileUploadMiddleware");
 const { use } = require("../routes/authRoutes");
+const { requireZipOrThrow } = require("../utils/zipHelper.js");
+
 // Register User
 const registerUser = async (req, res) => {
   // Check for validation errors
@@ -12,10 +14,18 @@ const registerUser = async (req, res) => {
     return res.status(400).json({ errors: errors.array() });
   }
 
-  const { email, first_name, last_name, phone_number, password, location } =
+  const { email, first_name, last_name, phone_number, password, zip_code } =
     req.body;
 
   try {
+    // Validate zip and get coords
+    let zipInfo;
+    try {
+      zipInfo = requireZipOrThrow(zip_code);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid ZIP code" });
+    }
+
     // Check if the email is already taken
     const existingUser = await User.getUserByEmail(email);
     if (existingUser) {
