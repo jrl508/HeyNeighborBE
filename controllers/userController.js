@@ -25,6 +25,7 @@ const registerUser = async (req, res) => {
     } catch (err) {
       return res.status(400).json({ error: "Invalid ZIP code" });
     }
+    const { zip, lat, lng, city, state } = zipInfo;
 
     // Check if the email is already taken
     const existingUser = await User.getUserByEmail(email);
@@ -43,7 +44,11 @@ const registerUser = async (req, res) => {
       last_name,
       phone_number,
       password_digest: hashedPassword,
-      location,
+      zip_code: zip,
+      lat,
+      lng,
+      city,
+      state,
     });
 
     // Return the user (excluding password) and a success message
@@ -84,8 +89,18 @@ const loginUser = async (req, res) => {
     }
     console.log("LOGIN SUCCESSFUL");
     console.dir(user);
-    const { id, first_name, last_name, profile_image, phone_number, location } =
-      user;
+    const {
+      id,
+      first_name,
+      last_name,
+      profile_image,
+      phone_number,
+      zip_code,
+      lat,
+      lng,
+      city,
+      state,
+    } = user;
     // Generate JWT token
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
@@ -101,7 +116,11 @@ const loginUser = async (req, res) => {
         last_name,
         profile_image,
         phone_number,
-        location,
+        zip_code,
+        lat,
+        lng,
+        city,
+        state,
       },
     });
   } catch (err) {
@@ -113,7 +132,29 @@ const loginUser = async (req, res) => {
 const updateUser = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { user } = req.body;
+    let { user } = req.body;
+
+    // If zip_code is provided, validate and get location data
+    if (user.zip_code) {
+      let zipInfo;
+      try {
+        zipInfo = requireZipOrThrow(user.zip_code);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid ZIP code" });
+      }
+      const { zip, lat, lng, city, state } = zipInfo;
+
+      // Replace zip_code with individual location fields
+      user = {
+        ...user,
+        zip_code: zip,
+        lat,
+        lng,
+        city,
+        state,
+      };
+    }
+
     const data = await User.updateUserProfile(userId, user);
     const updatedUser = data[0];
     res.status(200).json({
