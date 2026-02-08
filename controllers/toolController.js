@@ -53,6 +53,24 @@ const ToolController = {
       res.status(500).json({ message: "Error deleting tool" });
     }
   },
+
+  // Get tools by location and radius
+  getTools: async (req, res) => {
+    try {
+      const { zip, radius } = req.query;
+      if (!zip) {
+        return res.status(400).json({ message: "ZIP code is required" });
+      }
+      const maxDistance = radius ? Number(radius) : 10;
+      const tools = await Tool.findAvailableByZip(zip, maxDistance);
+      res.status(200).json(tools);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        message: error.message || "Error fetching tools by location",
+      });
+    }
+  },
 };
 
 module.exports = ToolController;
