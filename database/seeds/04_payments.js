@@ -7,7 +7,9 @@ exports.seed = async function (knex) {
   await knex("payments").del();
 
   // Get bookings from the database
-  const bookings = await knex("bookings").select("id", "total_amount", "status").orderBy("id");
+  const bookings = await knex("bookings")
+    .select("id", "total_amount", "status")
+    .orderBy("id");
 
   if (bookings.length === 0) {
     console.log("No bookings found. Skipping payment seeds.");
