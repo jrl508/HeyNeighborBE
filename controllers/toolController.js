@@ -74,7 +74,7 @@ const ToolController = {
         zip,
         maxDistance,
         pageLimit,
-        pageOffset
+        pageOffset,
       );
 
       res.status(200).json({
