@@ -47,7 +47,9 @@ const BookingController = {
         return res.status(404).json({ message: "Tool not found" });
       }
 
-      if (!tool.available) {
+      // Check true availability (field + blocks)
+      const isAvailable = await Tool.getAvailability(tool_id);
+      if (!isAvailable) {
         return res.status(400).json({ message: "Tool is not available" });
       }
 
@@ -57,7 +59,7 @@ const BookingController = {
       const hasConflict = await Booking.hasConflict(
         tool_id,
         start_date,
-        end_date
+        end_date,
       );
       if (hasConflict) {
         return res.status(409).json({
@@ -69,7 +71,7 @@ const BookingController = {
       const hasAvailabilityConflict = await ToolAvailability.hasConflict(
         tool_id,
         start_date,
-        end_date
+        end_date,
       );
       if (hasAvailabilityConflict) {
         return res.status(409).json({
@@ -80,7 +82,8 @@ const BookingController = {
       // Calculate totals
       const days = calculateDays(start_date, end_date);
       const price_per_day = parseFloat(tool.rental_price_per_day);
-      const delivery_fee = delivery_required && tool.delivery_available ? 25 : 0; // Fixed $25 delivery fee
+      const delivery_fee =
+        delivery_required && tool.delivery_available ? 25 : 0; // Fixed $25 delivery fee
       const deposit_amount = Math.ceil(price_per_day * 0.2); // 20% deposit
       const total_amount = days * price_per_day + delivery_fee + deposit_amount;
 
@@ -100,6 +103,16 @@ const BookingController = {
       };
 
       const [booking] = await Booking.create(bookingData);
+
+      // Block tool availability for booking period
+      await Tool.update(tool_id, { available: false });
+      await ToolAvailability.create({
+        tool_id,
+        blocked_start: start_date,
+        blocked_end: end_date,
+        reason: "booking",
+        notes: `Booking ID ${booking.id}`,
+      });
 
       // Create payment record
       const paymentData = {
@@ -256,7 +269,7 @@ const BookingController = {
       // Update payment status to reflect completion (ready for settlement)
       await Payment.updateStatus(
         (await Payment.findByBookingId(id)).id,
-        "completed"
+        "completed",
       );
 
       res.status(200).json({
@@ -283,25 +296,22 @@ const BookingController = {
       }
 
       // Verify user is renter or owner
-      if (
-        booking.renter_id !== userId &&
-        booking.owner_id !== userId
-      ) {
+      if (booking.renter_id !== userId && booking.owner_id !== userId) {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
       // Cannot cancel completed bookings
       if (["completed", "cancelled"].includes(booking.status)) {
-        return res
-          .status(400)
-          .json({ message: "Cannot cancel a completed or already cancelled booking" });
+        return res.status(400).json({
+          message: "Cannot cancel a completed or already cancelled booking",
+        });
       }
 
       const cancelledBy = booking.renter_id === userId ? "renter" : "owner";
       const [updatedBooking] = await Booking.cancel(
         id,
         cancelledBy,
-        reason || "No reason provided"
+        reason || "No reason provided",
       );
 
       // Handle refund logic (future: integrate with payment processor)
@@ -356,14 +366,14 @@ const BookingController = {
       const bookingConflict = await Booking.hasConflict(
         toolId,
         start_date,
-        end_date
+        end_date,
       );
 
       // Check for availability blocks
       const availabilityConflict = await ToolAvailability.hasConflict(
         toolId,
         start_date,
-        end_date
+        end_date,
       );
 
       const isAvailable = !bookingConflict && !availabilityConflict;
