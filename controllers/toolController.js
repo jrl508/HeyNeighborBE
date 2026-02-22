@@ -54,16 +54,38 @@ const ToolController = {
     }
   },
 
-  // Get tools by location and radius
+  // Get tools by location and radius (with pagination)
   getTools: async (req, res) => {
     try {
-      const { zip, radius } = req.query;
+      const { zip, radius, limit = 20, offset = 0 } = req.query;
       if (!zip) {
         return res.status(400).json({ message: "ZIP code is required" });
       }
       const maxDistance = radius ? Number(radius) : 10;
-      const tools = await Tool.findAvailableByZip(zip, maxDistance);
-      res.status(200).json(tools);
+      const pageLimit = Math.min(Number(limit), 100); // Max 100 per page
+      const pageOffset = Number(offset);
+
+      // Get total count
+      const countResult = await Tool.countAvailableByZip(zip, maxDistance);
+      const total = countResult[0]?.count || 0;
+
+      // Get paginated results
+      const tools = await Tool.findAvailableByZip(
+        zip,
+        maxDistance,
+        pageLimit,
+        pageOffset
+      );
+
+      res.status(200).json({
+        tools,
+        pagination: {
+          limit: pageLimit,
+          offset: pageOffset,
+          total,
+          pages: Math.ceil(total / pageLimit),
+        },
+      });
     } catch (error) {
       console.error(error);
       res.status(500).json({

@@ -14,9 +14,32 @@ const Tool = {
   delete: (id) => db("tools").where({ id }).del(),
 
   /**
-   * Find available tools by distance from a zip code
+   * Count available tools by distance from a zip code
    */
-  findAvailableByZip: async (zip, radius = 10) => {
+  countAvailableByZip: async (zip, radius = 10) => {
+    const origin = lookupZip(zip);
+    if (!origin) throw new Error("Invalid ZIP code");
+
+    return db("tools")
+      .join("users", "tools.user_id", "users.id")
+      .where("tools.available", true)
+      .whereRaw(
+        `
+        (3959 * acos(
+          cos(radians(?)) * cos(radians(users.lat)) *
+          cos(radians(users.lng) - radians(?)) +
+          sin(radians(?)) * sin(radians(users.lat))
+        )) <= ?
+        `,
+        [origin.lat, origin.lng, origin.lat, radius],
+      )
+      .count("tools.id as count");
+  },
+
+  /**
+   * Find available tools by distance from a zip code (with pagination)
+   */
+  findAvailableByZip: async (zip, radius = 10, limit = 20, offset = 0) => {
     const origin = lookupZip(zip);
     if (!origin) throw new Error("Invalid ZIP code");
 
@@ -46,7 +69,9 @@ const Tool = {
           [origin.lat, origin.lng, origin.lat],
         ),
       )
-      .orderBy("distance");
+      .orderBy("distance")
+      .limit(limit)
+      .offset(offset);
   },
 };
 
