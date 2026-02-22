@@ -36,10 +36,7 @@ const ToolAvailability = {
 
   // Update a blocked period
   update: (id, updates) =>
-    db("tool_availability")
-      .where({ id })
-      .update(updates)
-      .returning("*"),
+    db("tool_availability").where({ id }).update(updates).returning("*"),
 };
 
 module.exports = ToolAvailability;

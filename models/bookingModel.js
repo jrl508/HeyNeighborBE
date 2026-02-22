@@ -2,8 +2,7 @@ const db = require("../database/db");
 
 const Booking = {
   // Create a new booking request
-  create: (bookingData) =>
-    db("bookings").insert(bookingData).returning("*"),
+  create: (bookingData) => db("bookings").insert(bookingData).returning("*"),
 
   // Get booking by ID with tool and user details
   findById: (id) =>
@@ -21,7 +20,7 @@ const Booking = {
         db.raw("renter.email as renter_email"),
         db.raw("owner.first_name as owner_first_name"),
         db.raw("owner.last_name as owner_last_name"),
-        db.raw("owner.email as owner_email")
+        db.raw("owner.email as owner_email"),
       )
       .first(),
 

@@ -2,8 +2,7 @@ const db = require("../database/db");
 
 const Payment = {
   // Create a new payment record
-  create: (paymentData) =>
-    db("payments").insert(paymentData).returning("*"),
+  create: (paymentData) => db("payments").insert(paymentData).returning("*"),
 
   // Get payment by ID
   findById: (id) => db("payments").where({ id }).first(),
@@ -43,7 +42,12 @@ const Payment = {
       .join("bookings", "payments.booking_id", "bookings.id")
       .where({ renter_id: userId })
       .orWhere({ owner_id: userId })
-      .select("payments.*", "bookings.tool_id", "bookings.renter_id", "bookings.owner_id")
+      .select(
+        "payments.*",
+        "bookings.tool_id",
+        "bookings.renter_id",
+        "bookings.owner_id",
+      )
       .orderBy("payments.created_at", "desc"),
 };
 
