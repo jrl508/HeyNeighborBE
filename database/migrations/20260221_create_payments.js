@@ -3,13 +3,15 @@ exports.up = function (knex) {
     table.increments("id").primary();
     table.integer("booking_id").unsigned().notNullable();
     table.string("stripe_payment_intent_id").nullable(); // Will be populated when Stripe integrated
-    table.enum("status", [
-      "requires_payment_method",
-      "processing",
-      "succeeded",
-      "failed",
-      "refunded",
-    ]).defaultTo("requires_payment_method");
+    table
+      .enum("status", [
+        "requires_payment_method",
+        "processing",
+        "succeeded",
+        "failed",
+        "refunded",
+      ])
+      .defaultTo("requires_payment_method");
     table.decimal("amount", 10, 2).notNullable();
     table.string("currency", 3).defaultTo("USD");
     table.text("error_message").nullable(); // Store error details if payment fails

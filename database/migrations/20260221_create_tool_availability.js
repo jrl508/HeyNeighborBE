@@ -4,11 +4,9 @@ exports.up = function (knex) {
     table.integer("tool_id").unsigned().notNullable();
     table.date("blocked_start").notNullable();
     table.date("blocked_end").notNullable();
-    table.enum("reason", [
-      "maintenance",
-      "booking",
-      "owner_unavailable",
-    ]).defaultTo("owner_unavailable");
+    table
+      .enum("reason", ["maintenance", "booking", "owner_unavailable"])
+      .defaultTo("owner_unavailable");
     table.text("notes").nullable();
     table.timestamps(true, true);
     table.foreign("tool_id").references("tools.id").onDelete("CASCADE");

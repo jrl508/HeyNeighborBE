@@ -6,14 +6,16 @@ exports.up = function (knex) {
     table.integer("owner_id").unsigned().notNullable();
     table.date("start_date").notNullable();
     table.date("end_date").notNullable();
-    table.enum("status", [
-      "requested",
-      "confirmed",
-      "active",
-      "completed",
-      "cancelled",
-      "disputed",
-    ]).defaultTo("requested");
+    table
+      .enum("status", [
+        "requested",
+        "confirmed",
+        "active",
+        "completed",
+        "cancelled",
+        "disputed",
+      ])
+      .defaultTo("requested");
     table.decimal("price_per_day", 10, 2).notNullable();
     table.decimal("total_amount", 10, 2).notNullable();
     table.boolean("delivery_required").defaultTo(false);
