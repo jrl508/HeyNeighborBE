@@ -8,6 +8,19 @@ const Tool = {
 
   findByUserId: (userId) => db("tools").where({ user_id: userId }),
 
+  // Get true availability for a tool
+  getAvailability: async (toolId) => {
+    const tool = await db("tools").where({ id: toolId }).first();
+    if (!tool) return false;
+    if (!tool.available) return false;
+    // Check for any current blocks in tool_availability
+    const today = new Date();
+    const blocks = await db("tool_availability")
+      .where({ tool_id: toolId })
+      .where("blocked_start", "<=", today)
+      .where("blocked_end", ">=", today);
+    return blocks.length === 0;
+  },
   update: (id, updates) =>
     db("tools").where({ id }).update(updates).returning("*"),
 
