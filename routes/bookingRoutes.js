@@ -16,10 +16,18 @@ router.get("/:id", authMiddleware, BookingController.getBookingById);
 router.patch("/:id/confirm", authMiddleware, BookingController.confirmBooking);
 
 // Activate a booking (rental period started)
-router.patch("/:id/activate", authMiddleware, BookingController.activateBooking);
+router.patch(
+  "/:id/activate",
+  authMiddleware,
+  BookingController.activateBooking,
+);
 
 // Complete a booking (rental period ended)
-router.patch("/:id/complete", authMiddleware, BookingController.completeBooking);
+router.patch(
+  "/:id/complete",
+  authMiddleware,
+  BookingController.completeBooking,
+);
 
 // Cancel a booking (requires auth)
 router.delete("/:id", authMiddleware, BookingController.cancelBooking);
@@ -28,6 +36,10 @@ router.delete("/:id", authMiddleware, BookingController.cancelBooking);
 router.get("/check/:toolId/availability", BookingController.checkAvailability);
 
 // Get all confirmed/active bookings for a tool (owner only)
-router.get("/tool/:toolId/bookings", authMiddleware, BookingController.getToolBookings);
+router.get(
+  "/tool/:toolId/bookings",
+  authMiddleware,
+  BookingController.getToolBookings,
+);
 
 module.exports = router;
