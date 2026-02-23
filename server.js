@@ -4,6 +4,8 @@ const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const toolRoutes = require("./routes/toolRoutes");
+const bookingRoutes = require("./routes/bookingRoutes");
+const localBusinessRoutes = require("./routes/localBusinessRoutes");
 const path = require("path");
 const app = express();
 
@@ -16,7 +18,7 @@ app.use(
     origin: "http://localhost:3000",
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
-  })
+  }),
 );
 
 // Serve the uploads folder as static
@@ -27,6 +29,8 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/tools", toolRoutes);
+app.use("/api/bookings", bookingRoutes);
+app.use("/api/local-businesses", localBusinessRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
