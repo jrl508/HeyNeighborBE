@@ -41,9 +41,7 @@ const LocalBusiness = {
 
   // Count total businesses
   countAll: () =>
-    db("local_businesses")
-      .count("local_businesses.id as count")
-      .first(),
+    db("local_businesses").count("local_businesses.id as count").first(),
 
   // Search businesses by location (zip + radius)
   findByLocation: async (zip, radius = 10, limit = 20, offset = 0) => {

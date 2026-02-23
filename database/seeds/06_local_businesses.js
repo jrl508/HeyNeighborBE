@@ -22,16 +22,25 @@ exports.seed = async function (knex) {
       type: "General Contractor",
       address: "123 Main St, Taunton, MA 02780",
       phone: "555-555-5555",
-      description: "Experienced general contractor specializing in home renovations",
-      hours: {
+      description:
+        "Experienced general contractor specializing in home renovations",
+      hours: JSON.stringify({
         startTime: { hour: "09", minute: "00", mer: "AM" },
         endTime: { hour: "05", minute: "00", mer: "PM" },
-        days: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
-      },
-      links: [
+        days: {
+          mon: true,
+          tue: true,
+          wed: true,
+          thu: true,
+          fri: true,
+          sat: false,
+          sun: false,
+        },
+      }),
+      links: JSON.stringify([
         { url: "https://www.joescontracting.com", type: 1 },
         { url: "https://www.facebook.com/joescontracting", type: 2 },
-      ],
+      ]),
       rating: 4.5,
       review_count: 10,
       lat: 41.9099,
@@ -43,15 +52,24 @@ exports.seed = async function (knex) {
       type: "Plumber",
       address: "456 Oak Ave, Taunton, MA 02780",
       phone: "555-666-6666",
-      description: "Licensed plumber offering residential and commercial services",
-      hours: {
+      description:
+        "Licensed plumber offering residential and commercial services",
+      hours: JSON.stringify({
         startTime: { hour: "08", minute: "00", mer: "AM" },
         endTime: { hour: "06", minute: "00", mer: "PM" },
-        days: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false },
-      },
-      links: [
+        days: {
+          mon: true,
+          tue: true,
+          wed: true,
+          thu: true,
+          fri: true,
+          sat: true,
+          sun: false,
+        },
+      }),
+      links: JSON.stringify([
         { url: "https://www.sarahsplumbing.com", type: 1 },
-      ],
+      ]),
       rating: 4.8,
       review_count: 15,
       lat: 41.9089,
@@ -63,15 +81,24 @@ exports.seed = async function (knex) {
       type: "Electrician",
       address: "789 Elm St, Taunton, MA 02780",
       phone: "555-777-7777",
-      description: "Licensed electrician for residential and commercial electrical work",
-      hours: {
+      description:
+        "Licensed electrician for residential and commercial electrical work",
+      hours: JSON.stringify({
         startTime: { hour: "07", minute: "00", mer: "AM" },
         endTime: { hour: "04", minute: "00", mer: "PM" },
-        days: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: false, sun: false },
-      },
-      links: [
+        days: {
+          mon: true,
+          tue: true,
+          wed: true,
+          thu: true,
+          fri: true,
+          sat: false,
+          sun: false,
+        },
+      }),
+      links: JSON.stringify([
         { url: "https://www.mikeselectrical.com", type: 1 },
-      ],
+      ]),
       rating: 4.6,
       review_count: 12,
       lat: 41.9079,
@@ -84,15 +111,23 @@ exports.seed = async function (knex) {
       address: "321 Pine Rd, Taunton, MA 02780",
       phone: "555-888-8888",
       description: "Professional landscaping and lawn care services",
-      hours: {
+      hours: JSON.stringify({
         startTime: { hour: "06", minute: "00", mer: "AM" },
         endTime: { hour: "06", minute: "00", mer: "PM" },
-        days: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false },
-      },
-      links: [
+        days: {
+          mon: true,
+          tue: true,
+          wed: true,
+          thu: true,
+          fri: true,
+          sat: true,
+          sun: false,
+        },
+      }),
+      links: JSON.stringify([
         { url: "https://www.jessicaslandscaping.com", type: 1 },
         { url: "https://www.facebook.com/jessicaslandscaping", type: 2 },
-      ],
+      ]),
       rating: 4.7,
       review_count: 18,
       lat: 41.9109,
@@ -105,14 +140,20 @@ exports.seed = async function (knex) {
       address: "654 Maple Dr, Taunton, MA 02780",
       phone: "555-999-9999",
       description: "HVAC installation, repair, and maintenance services",
-      hours: {
+      hours: JSON.stringify({
         startTime: { hour: "08", minute: "00", mer: "AM" },
         endTime: { hour: "05", minute: "00", mer: "PM" },
-        days: { mon: true, tue: true, wed: true, thu: true, fri: true, sat: true, sun: false },
-      },
-      links: [
-        { url: "https://www.tomshvac.com", type: 1 },
-      ],
+        days: {
+          mon: true,
+          tue: true,
+          wed: true,
+          thu: true,
+          fri: true,
+          sat: true,
+          sun: false,
+        },
+      }),
+      links: JSON.stringify([{ url: "https://www.tomshvac.com", type: 1 }]),
       rating: 4.4,
       review_count: 8,
       lat: 41.9099,

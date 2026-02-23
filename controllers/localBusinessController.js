@@ -22,10 +22,7 @@ const LocalBusinessController = {
         req.body;
       const owner_id = req.user.id;
 
-      console.log(
-        `[POST /local-businesses] user=${owner_id} body=`,
-        req.body,
-      );
+      console.log(`[POST /local-businesses] user=${owner_id} body=`, req.body);
 
       // Validate
       const errors = validateBusinessData({ name, type, address, phone });
@@ -115,9 +112,7 @@ const LocalBusinessController = {
   searchByLocation: async (req, res) => {
     try {
       const { zip, radius, limit = 20, offset = 0 } = req.query;
-      console.log(
-        `[GET /local-businesses/search] zip=${zip} radius=${radius}`,
-      );
+      console.log(`[GET /local-businesses/search] zip=${zip} radius=${radius}`);
 
       if (!zip) {
         return res
