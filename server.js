@@ -6,6 +6,7 @@ const userRoutes = require("./routes/userRoutes");
 const toolRoutes = require("./routes/toolRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const localBusinessRoutes = require("./routes/localBusinessRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
 const path = require("path");
 const app = express();
 
@@ -31,6 +32,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/tools", toolRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/local-businesses", localBusinessRoutes);
+app.use("/api/payments", paymentRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
