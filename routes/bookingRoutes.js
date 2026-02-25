@@ -22,6 +22,13 @@ router.patch(
   BookingController.activateBooking,
 );
 
+// Renter marks tool as returned
+router.patch(
+  "/:id/return",
+  authMiddleware,
+  BookingController.returnBooking,
+);
+
 // Complete a booking (rental period ended)
 router.patch(
   "/:id/complete",
