@@ -25,7 +25,15 @@ app.use(
 // Serve the uploads folder as static
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-app.use(express.json());
+// Stripe webhook requires raw body for signature verification
+// We must use express.json() for all routes EXCEPT the webhook
+app.use((req, res, next) => {
+  if (req.originalUrl === "/api/payments/webhook") {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
