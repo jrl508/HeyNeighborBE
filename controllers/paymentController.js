@@ -1,6 +1,7 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const Payment = require("../models/paymentModel");
 const Booking = require("../models/bookingModel");
+const ToolAvailability = require("../models/toolAvailabilityModel");
 
 const PaymentController = {
   // POST /api/payments/intent - Create a Stripe PaymentIntent for a booking
@@ -170,14 +171,17 @@ const PaymentController = {
         "authorized",
       );
 
+      // Transition booking to 'requested' (now secured by payment)
+      await Booking.updateStatus(booking_id, "requested");
+
       console.log(
-        `[POST /payments/confirm] payment authorized: payment_id=${payment.id}`,
+        `[POST /payments/confirm] payment authorized & booking requested: payment_id=${payment.id} booking_id=${booking_id}`,
       );
 
       res.status(200).json({
-        booking,
+        booking: { ...booking, status: "requested" },
         payment,
-        message: "Payment authorized successfully, pending capture.",
+        message: "Payment authorized successfully, booking request sent to owner.",
       });
     } catch (error) {
       console.error("[POST /payments/confirm] error=", error);
@@ -276,17 +280,40 @@ const PaymentController = {
       console.log(`[POST /payments/void] voiding payment intent: ${payment.stripe_payment_intent_id}`);
 
       // Cancel the payment intent in Stripe
-      let paymentIntent;
       if (payment.stripe_payment_intent_id) {
-        paymentIntent = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
-        console.log(`[POST /payments/void] cancel result: ${paymentIntent.status}`);
+        try {
+          const paymentIntent = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+          console.log(`[POST /payments/void] Stripe cancel result: ${paymentIntent.status}`);
+        } catch (stripeErr) {
+          // If already canceled or in a state where it can't be canceled, we might get an error
+          // We check if it's already canceled to proceed with local DB update
+          if (stripeErr.code === 'payment_intent_unexpected_state' || 
+              stripeErr.message.includes('already been canceled')) {
+            console.log(`[POST /payments/void] Payment already canceled on Stripe side, syncing local DB.`);
+          } else {
+            throw stripeErr; // Re-throw if it's a different Stripe error
+          }
+        }
       }
 
       // Update payment status to cancelled
       const [updatedPayment] = await Payment.updateStatus(payment.id, "cancelled");
 
+      // Also update the booking status
+      await Booking.updateStatus(booking_id, "cancelled");
+
+      // Set tool back to available
+      if (booking.tool_id) {
+        const Tool = require("../models/toolModel");
+        await Tool.update(booking.tool_id, { available: true });
+        console.log(`[POST /payments/void] set tool ${booking.tool_id} back to available.`);
+      }
+
+      // Remove availability block for this booking
+      await ToolAvailability.deleteByBookingId(booking_id);
+
       res.status(200).json({
-        message: "Payment voided successfully",
+        message: "Payment voided and booking cancelled successfully. Tool is now available again.",
         payment: updatedPayment
       });
     } catch (error) {
@@ -356,6 +383,13 @@ async function handlePaymentIntentAuthorized(paymentIntent) {
       console.log(
         `[Webhook] updated payment status to authorized: ${updatedPayment.id}`,
       );
+    }
+
+    // Update booking status to requested if it's still pending_payment
+    const booking = await Booking.findById(booking_id);
+    if (booking && booking.status === "pending_payment") {
+      await Booking.updateStatus(booking_id, "requested");
+      console.log(`[Webhook] updated booking status to requested: ${booking_id}`);
     }
   } catch (error) {
     console.error("[Webhook] error handling payment_intent.amount_capturable_updated:", error);
