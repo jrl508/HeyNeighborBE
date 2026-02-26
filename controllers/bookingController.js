@@ -2,6 +2,7 @@ const Booking = require("../models/bookingModel");
 const Payment = require("../models/paymentModel");
 const ToolAvailability = require("../models/toolAvailabilityModel");
 const Tool = require("../models/toolModel");
+const db = require("../database/db");
 
 // Helper: Calculate days between two dates
 const calculateDays = (startDate, endDate) => {
@@ -12,8 +13,15 @@ const calculateDays = (startDate, endDate) => {
 
 // Helper: Validate date range
 const validateDateRange = (startDate, endDate) => {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
+  // Use local date parsing to avoid UTC shift issues
+  const [sYear, sMonth, sDay] = startDate.split("-").map(Number);
+  const start = new Date(sYear, sMonth - 1, sDay);
+  start.setHours(0, 0, 0, 0);
+
+  const [eYear, eMonth, eDay] = endDate.split("-").map(Number);
+  const end = new Date(eYear, eMonth - 1, eDay);
+  end.setHours(0, 0, 0, 0);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -201,7 +209,10 @@ const BookingController = {
           .json({ message: "Only requested bookings can be confirmed" });
       }
 
-      const [updatedBooking] = await Booking.updateStatus(id, "confirmed");
+      const [updatedBooking] = await Booking.update(id, {
+        status: "confirmed",
+        confirmed_at: db.fn.now(),
+      });
 
       res.status(200).json({
         booking: updatedBooking,
@@ -236,7 +247,10 @@ const BookingController = {
           .json({ message: "Rental period has not started yet" });
       }
 
-      const [updatedBooking] = await Booking.updateStatus(id, "active");
+      const [updatedBooking] = await Booking.update(id, {
+        status: "active",
+        activated_at: db.fn.now(),
+      });
 
       res.status(200).json({
         booking: updatedBooking,
@@ -267,7 +281,10 @@ const BookingController = {
         return res.status(400).json({ message: "Only active rentals can be marked as returned" });
       }
 
-      const [updatedBooking] = await Booking.updateStatus(id, "returning");
+      const [updatedBooking] = await Booking.update(id, {
+        status: "returning",
+        return_initiated_at: db.fn.now(),
+      });
 
       res.status(200).json({
         booking: updatedBooking,
@@ -300,7 +317,10 @@ const BookingController = {
         });
       }
 
-      const [updatedBooking] = await Booking.updateStatus(id, "completed");
+      const [updatedBooking] = await Booking.update(id, {
+        status: "completed",
+        completed_at: db.fn.now(),
+      });
 
       // Update payment status to reflect completion (ready for settlement)
       const payment = await Payment.findByBookingId(id);
