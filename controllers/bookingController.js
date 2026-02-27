@@ -91,7 +91,7 @@ const BookingController = {
       const days = calculateDays(start_date, end_date);
       const price_per_day = parseFloat(tool.rental_price_per_day);
       const delivery_fee =
-        delivery_required && tool.delivery_available ? 25 : 0; // Fixed $25 delivery fee
+        delivery_required && tool.deliveryAvailable ? parseFloat(tool.delivery_fee) : 0;
       const deposit_amount = Math.ceil(price_per_day * 0.2); // 20% deposit
       const total_amount = days * price_per_day + delivery_fee + deposit_amount;
 
@@ -108,6 +108,7 @@ const BookingController = {
         delivery_fee,
         deposit_amount,
         status: "pending_payment",
+        delivery_status: delivery_required ? "requested" : "none",
       };
 
       const [booking] = await Booking.create(bookingData);
@@ -188,6 +189,7 @@ const BookingController = {
   confirmBooking: async (req, res) => {
     try {
       const { id } = req.params;
+      const { deliveryDecision } = req.body; // 'accept' or 'reject'
       const owner_id = req.user.id;
 
       const booking = await Booking.findById(id);
@@ -196,7 +198,6 @@ const BookingController = {
         return res.status(404).json({ message: "Booking not found" });
       }
 
-      // Verify user is the owner
       if (booking.owner_id !== owner_id) {
         return res
           .status(403)
@@ -209,18 +210,48 @@ const BookingController = {
           .json({ message: "Only requested bookings can be confirmed" });
       }
 
+      const payment = await Payment.findByBookingId(id);
+      if (!payment || !payment.stripe_payment_intent_id) {
+        return res.status(400).json({ message: "Valid payment intent not found for this booking." });
+      }
+
+      let finalAmount = payment.amount;
+      let deliveryStatus = booking.delivery_status;
+      let deliveryFee = booking.delivery_fee;
+
+      if (booking.delivery_status === 'requested') {
+        if (deliveryDecision === 'reject') {
+          finalAmount = parseFloat(booking.total_amount) - parseFloat(booking.delivery_fee);
+          deliveryStatus = 'rejected';
+          deliveryFee = 0;
+        } else { // 'accept'
+          deliveryStatus = 'confirmed';
+        }
+      }
+      
+      // Capture payment with final amount
+      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+      await stripe.paymentIntents.capture(payment.stripe_payment_intent_id, {
+        amount_to_capture: Math.round(finalAmount * 100), // convert to cents
+      });
+
+      // Update local records
+      await Payment.update(payment.id, { amount: finalAmount, status: 'succeeded' });
       const [updatedBooking] = await Booking.update(id, {
         status: "confirmed",
         confirmed_at: db.fn.now(),
+        delivery_status: deliveryStatus,
+        delivery_fee: deliveryFee,
+        total_amount: finalAmount
       });
 
       res.status(200).json({
         booking: updatedBooking,
-        message: "Booking confirmed",
+        message: "Booking confirmed and payment captured.",
       });
     } catch (error) {
       console.error("Error confirming booking:", error);
-      res.status(500).json({ message: "Error confirming booking" });
+      res.status(500).json({ message: "Error confirming booking", error: error.message });
     }
   },
 
@@ -325,7 +356,8 @@ const BookingController = {
       // Update payment status to reflect completion (ready for settlement)
       const payment = await Payment.findByBookingId(id);
       if (payment) {
-        await Payment.updateStatus(payment.id, "completed");
+        // 'succeeded' is the final state in our enum for captured payments
+        await Payment.updateStatus(payment.id, "succeeded");
       }
 
       // Remove availability block for this booking
@@ -333,7 +365,7 @@ const BookingController = {
 
       res.status(200).json({
         booking: updatedBooking,
-        message: "Booking completed and receipt confirmed.",
+        message: "Booking completed and tool receipt confirmed.",
       });
     } catch (error) {
       console.error("Error completing booking:", error);

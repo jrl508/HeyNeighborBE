@@ -26,6 +26,16 @@ const Payment = {
       })
       .returning("*"),
 
+  // Update payment record
+  update: (id, updates) =>
+    db("payments")
+      .where({ id })
+      .update({
+        ...updates,
+        updated_at: db.fn.now(),
+      })
+      .returning("*"),
+
   // Update with Stripe intent ID (after Stripe integration)
   setStripeIntentId: (id, stripeIntentId) =>
     db("payments")

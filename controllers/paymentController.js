@@ -416,15 +416,6 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
         `[Webhook] updated payment status to succeeded: ${updatedPayment.id}`,
       );
     }
-
-    // Update booking status if needed
-    const booking = await Booking.findById(booking_id);
-    if (booking && booking.status !== "completed" && booking.status !== "cancelled") {
-      // Once payment is captured, the transaction is effectively complete
-      // You might want to set it to 'completed' here if the capture happens after return
-      await Booking.updateStatus(booking_id, "completed");
-      console.log(`[Webhook] updated booking status to completed: ${booking_id}`);
-    }
   } catch (error) {
     console.error("[Webhook] error handling payment_intent.succeeded:", error);
   }
