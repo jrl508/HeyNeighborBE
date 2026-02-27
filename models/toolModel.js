@@ -1,5 +1,6 @@
 const db = require("../database/db");
 const { lookupZip } = require("../utils/zipHelper");
+const User = require("./userModel");
 
 const Tool = {
   create: (toolData) => db("tools").insert(toolData).returning("*"),
@@ -29,11 +30,11 @@ const Tool = {
   /**
    * Count available tools by distance from a zip code
    */
-  countAvailableByZip: async (zip, radius = 10) => {
+  countAvailableByZip: async (zip, radius = 10, requestingUserId = null) => {
     const origin = lookupZip(zip);
     if (!origin) throw new Error("Invalid ZIP code");
 
-    return db("tools")
+    let query = db("tools")
       .join("users", "tools.user_id", "users.id")
       .where("tools.available", true)
       .whereRaw(
@@ -45,18 +46,28 @@ const Tool = {
         )) <= ?
         `,
         [origin.lat, origin.lng, origin.lat, radius],
-      )
-      .count("tools.id as count");
+      );
+    
+    if (requestingUserId) {
+      const blockedUserIds = (await User.getBlockingUsers(requestingUserId)).map(b => b.blocked_id);
+      const blockedByMeUserIds = (await User.getBlockedByUsers(requestingUserId)).map(b => b.blocker_id);
+      const allBlockedUserIds = [...new Set([...blockedUserIds, ...blockedByMeUserIds])];
+      
+      if (allBlockedUserIds.length > 0) {
+        query = query.whereNotIn("tools.user_id", allBlockedUserIds);
+      }
+    }
+    return query.count("tools.id as count");
   },
 
   /**
    * Find available tools by distance from a zip code (with pagination)
    */
-  findAvailableByZip: async (zip, radius = 10, limit = 20, offset = 0) => {
+  findAvailableByZip: async (zip, radius = 10, limit = 20, offset = 0, requestingUserId = null) => {
     const origin = lookupZip(zip);
     if (!origin) throw new Error("Invalid ZIP code");
 
-    return db("tools")
+    let query = db("tools")
       .join("users", "tools.user_id", "users.id")
       .where("tools.available", true)
       .whereRaw(
@@ -68,7 +79,19 @@ const Tool = {
         )) <= ?
         `,
         [origin.lat, origin.lng, origin.lat, radius],
-      )
+      );
+
+    if (requestingUserId) {
+      const blockedUserIds = (await User.getBlockingUsers(requestingUserId)).map(b => b.blocked_id);
+      const blockedByMeUserIds = (await User.getBlockedByUsers(requestingUserId)).map(b => b.blocker_id);
+      const allBlockedUserIds = [...new Set([...blockedUserIds, ...blockedByMeUserIds])];
+      
+      if (allBlockedUserIds.length > 0) {
+        query = query.whereNotIn("tools.user_id", allBlockedUserIds);
+      }
+    }
+      
+    return query
       .select(
         "tools.*",
         db.raw(

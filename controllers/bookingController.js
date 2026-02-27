@@ -2,6 +2,7 @@ const Booking = require("../models/bookingModel");
 const Payment = require("../models/paymentModel");
 const ToolAvailability = require("../models/toolAvailabilityModel");
 const Tool = require("../models/toolModel");
+const User = require("../models/userModel");
 const db = require("../database/db");
 
 // Helper: Calculate days between two dates
@@ -62,6 +63,12 @@ const BookingController = {
       }
 
       const owner_id = tool.user_id;
+
+      // Check if renter or owner is blocked
+      const isBlocked = await User.isBlocked(renter_id, owner_id);
+      if (isBlocked) {
+        return res.status(403).json({ message: "Booking forbidden: renter or owner is blocked." });
+      }
 
       // Check for conflicts with existing bookings
       const hasConflict = await Booking.hasConflict(

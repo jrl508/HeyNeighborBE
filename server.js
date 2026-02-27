@@ -1,4 +1,5 @@
 const express = require("express");
+const http = require("http");
 const dotenv = require("dotenv");
 const cors = require("cors");
 const authRoutes = require("./routes/authRoutes");
@@ -7,12 +8,18 @@ const toolRoutes = require("./routes/toolRoutes");
 const bookingRoutes = require("./routes/bookingRoutes");
 const localBusinessRoutes = require("./routes/localBusinessRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
+const messageRoutes = require("./routes/messageRoutes");
+const { initSocket } = require("./socket");
 const path = require("path");
 const app = express();
+const server = http.createServer(app);
 
 dotenv.config();
 
-const PORT = process.env.PORT;
+const PORT = process.env.PORT || 3001;
+
+// Initialize Socket.io
+initSocket(server);
 
 app.use(
   cors({
@@ -41,7 +48,8 @@ app.use("/api/tools", toolRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/local-businesses", localBusinessRoutes);
 app.use("/api/payments", paymentRoutes);
+app.use("/api/messaging", messageRoutes);
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
