@@ -72,9 +72,10 @@ const ToolController = {
       const maxDistance = radius ? Number(radius) : 10;
       const pageLimit = Math.min(Number(limit), 100); // Max 100 per page
       const pageOffset = Number(offset);
+      const requestingUserId = req.user.id; // Get the ID of the user making the request
 
       // Get total count
-      const countResult = await Tool.countAvailableByZip(zip, maxDistance);
+      const countResult = await Tool.countAvailableByZip(zip, maxDistance, requestingUserId);
       const total = countResult[0]?.count || 0;
 
       // Get paginated results
@@ -83,6 +84,7 @@ const ToolController = {
         maxDistance,
         pageLimit,
         pageOffset,
+        requestingUserId, // Pass requestingUserId to filter blocked users' tools
       );
 
       res.status(200).json({
