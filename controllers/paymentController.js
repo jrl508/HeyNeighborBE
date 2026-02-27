@@ -1,6 +1,7 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const Payment = require("../models/paymentModel");
 const Booking = require("../models/bookingModel");
+const ToolAvailability = require("../models/toolAvailabilityModel");
 
 const PaymentController = {
   // POST /api/payments/intent - Create a Stripe PaymentIntent for a booking
@@ -80,6 +81,7 @@ const PaymentController = {
           automatic_payment_methods: {
             enabled: true,
           },
+          capture_method: "manual", // ADD THIS: Enable delayed capture
         });
 
         console.log(
@@ -135,13 +137,13 @@ const PaymentController = {
         `[POST /payments/confirm] intent status: ${paymentIntent.status}`,
       );
 
-      // Check if payment was successful
-      if (paymentIntent.status !== "succeeded") {
+      // Check if payment was authorized (not succeeded yet)
+      if (paymentIntent.status !== "requires_capture") {
         console.error(
-          `[POST /payments/confirm] payment not succeeded: status=${paymentIntent.status}`,
+          `[POST /payments/confirm] payment not authorized: status=${paymentIntent.status}`,
         );
         return res.status(400).json({
-          message: `Payment was not successful. Status: ${paymentIntent.status}`,
+          message: `Payment was not authorized. Status: ${paymentIntent.status}`,
         });
       }
 
@@ -162,25 +164,162 @@ const PaymentController = {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // Update payment status to succeeded
+      // Update payment status to authorized (pending capture)
+      const paymentRecord = await Payment.findByBookingId(booking_id);
       const [payment] = await Payment.updateStatus(
-        (await Payment.findByBookingId(booking_id)).id,
-        "succeeded",
+        paymentRecord.id,
+        "authorized",
       );
 
+      // Transition booking to 'requested' (now secured by payment)
+      await Booking.updateStatus(booking_id, "requested");
+
       console.log(
-        `[POST /payments/confirm] payment succeeded: payment_id=${payment.id}`,
+        `[POST /payments/confirm] payment authorized & booking requested: payment_id=${payment.id} booking_id=${booking_id}`,
       );
 
       res.status(200).json({
-        booking,
+        booking: { ...booking, status: "requested" },
         payment,
-        message: "Payment confirmed successfully",
+        message: "Payment authorized successfully, booking request sent to owner.",
       });
     } catch (error) {
       console.error("[POST /payments/confirm] error=", error);
       res.status(500).json({
-        message: "Error confirming payment",
+        message: "Error confirming payment authorization",
+        error: error.message,
+      });
+    }
+  },
+
+  // POST /api/payments/capture - Capture authorized payment (Owner action)
+  capturePayment: async (req, res) => {
+    try {
+      const { booking_id } = req.body;
+      const userId = req.user.id;
+
+      if (!booking_id) {
+        return res.status(400).json({ message: "booking_id is required" });
+      }
+
+      // Get booking and verify owner
+      const booking = await Booking.findById(booking_id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      if (booking.owner_id !== userId) {
+        return res.status(403).json({ message: "Unauthorized: only the owner can capture payment" });
+      }
+
+      // Get payment record
+      const payment = await Payment.findByBookingId(booking_id);
+      if (!payment || payment.status !== "authorized") {
+        return res.status(400).json({ 
+          message: "Payment not in a capture-ready state (must be 'authorized')" 
+        });
+      }
+
+      console.log(`[POST /payments/capture] capturing payment intent: ${payment.stripe_payment_intent_id}`);
+
+      // Capture the payment in Stripe
+      const paymentIntent = await stripe.paymentIntents.capture(payment.stripe_payment_intent_id);
+
+      console.log(`[POST /payments/capture] capture result: ${paymentIntent.status}`);
+
+      if (paymentIntent.status !== "succeeded") {
+        return res.status(400).json({ 
+          message: `Payment capture failed. Status: ${paymentIntent.status}` 
+        });
+      }
+
+      // Update payment status to succeeded
+      const [updatedPayment] = await Payment.updateStatus(payment.id, "succeeded");
+
+      res.status(200).json({
+        message: "Payment captured successfully",
+        payment: updatedPayment
+      });
+    } catch (error) {
+      console.error("[POST /payments/capture] error=", error);
+      res.status(500).json({
+        message: "Error capturing payment",
+        error: error.message,
+      });
+    }
+  },
+
+  // POST /api/payments/void - Void (cancel) authorized payment (Renter or Owner action)
+  voidPayment: async (req, res) => {
+    try {
+      const { booking_id } = req.body;
+      const userId = req.user.id;
+
+      if (!booking_id) {
+        return res.status(400).json({ message: "booking_id is required" });
+      }
+
+      // Get booking and verify user is involved
+      const booking = await Booking.findById(booking_id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      if (booking.renter_id !== userId && booking.owner_id !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get payment record
+      const payment = await Payment.findByBookingId(booking_id);
+      if (!payment || (payment.status !== "authorized" && payment.status !== "requires_payment_method")) {
+        return res.status(400).json({ 
+          message: "Payment not in a voidable state (must be 'authorized' or 'requires_payment_method')" 
+        });
+      }
+
+      console.log(`[POST /payments/void] voiding payment intent: ${payment.stripe_payment_intent_id}`);
+
+      // Cancel the payment intent in Stripe
+      if (payment.stripe_payment_intent_id) {
+        try {
+          const paymentIntent = await stripe.paymentIntents.cancel(payment.stripe_payment_intent_id);
+          console.log(`[POST /payments/void] Stripe cancel result: ${paymentIntent.status}`);
+        } catch (stripeErr) {
+          // If already canceled or in a state where it can't be canceled, we might get an error
+          // We check if it's already canceled to proceed with local DB update
+          if (stripeErr.code === 'payment_intent_unexpected_state' || 
+              stripeErr.message.includes('already been canceled')) {
+            console.log(`[POST /payments/void] Payment already canceled on Stripe side, syncing local DB.`);
+          } else {
+            throw stripeErr; // Re-throw if it's a different Stripe error
+          }
+        }
+      }
+
+      // Update payment status to cancelled
+      const [updatedPayment] = await Payment.updateStatus(payment.id, "cancelled");
+
+      // Also update the booking status
+      await Booking.updateStatus(booking_id, "cancelled");
+
+      // Set tool back to available
+      if (booking.tool_id) {
+        const Tool = require("../models/toolModel");
+        await Tool.update(booking.tool_id, { available: true });
+        console.log(`[POST /payments/void] set tool ${booking.tool_id} back to available.`);
+      }
+
+      // Remove availability block for this booking
+      await ToolAvailability.deleteByBookingId(booking_id);
+
+      res.status(200).json({
+        message: "Payment voided and booking cancelled successfully. Tool is now available again.",
+        payment: updatedPayment
+      });
+    } catch (error) {
+      console.error("[POST /payments/void] error=", error);
+      res.status(500).json({
+        message: "Error voiding payment",
         error: error.message,
       });
     }
@@ -205,11 +344,17 @@ const PaymentController = {
 
     // Handle different event types
     switch (event.type) {
+      case "payment_intent.amount_capturable_updated":
+        await handlePaymentIntentAuthorized(event.data.object);
+        break;
       case "payment_intent.succeeded":
         await handlePaymentIntentSucceeded(event.data.object);
         break;
       case "payment_intent.payment_failed":
         await handlePaymentIntentFailed(event.data.object);
+        break;
+      case "payment_intent.canceled":
+        await handlePaymentIntentCanceled(event.data.object);
         break;
       default:
         console.log(`[Webhook] unhandled event type: ${event.type}`);
@@ -218,6 +363,38 @@ const PaymentController = {
     res.json({ received: true });
   },
 };
+
+// Helper: Handle payment intent authorized (ready for capture)
+async function handlePaymentIntentAuthorized(paymentIntent) {
+  try {
+    const booking_id = paymentIntent.metadata.booking_id;
+
+    console.log(
+      `[Webhook] payment_intent.amount_capturable_updated (authorized) for booking: ${booking_id}`,
+    );
+
+    // Update payment record
+    const payment = await Payment.findByBookingId(booking_id);
+    if (payment && payment.status !== "authorized" && payment.status !== "succeeded") {
+      const [updatedPayment] = await Payment.updateStatus(
+        payment.id,
+        "authorized",
+      );
+      console.log(
+        `[Webhook] updated payment status to authorized: ${updatedPayment.id}`,
+      );
+    }
+
+    // Update booking status to requested if it's still pending_payment
+    const booking = await Booking.findById(booking_id);
+    if (booking && booking.status === "pending_payment") {
+      await Booking.updateStatus(booking_id, "requested");
+      console.log(`[Webhook] updated booking status to requested: ${booking_id}`);
+    }
+  } catch (error) {
+    console.error("[Webhook] error handling payment_intent.amount_capturable_updated:", error);
+  }
+}
 
 // Helper: Handle payment intent succeeded
 async function handlePaymentIntentSucceeded(paymentIntent) {
@@ -240,17 +417,41 @@ async function handlePaymentIntentSucceeded(paymentIntent) {
       );
     }
 
-    // Update booking status if not already confirmed
+    // Update booking status if needed
     const booking = await Booking.findById(booking_id);
-    if (booking && booking.status === "requested") {
-      // Auto-confirm the booking (alternatively, owner can manually confirm)
-      // For now, we'll leave it in "requested" state for owner confirmation
-      console.log(
-        `[Webhook] booking ${booking_id} payment confirmed, awaiting owner confirmation`,
-      );
+    if (booking && booking.status !== "completed" && booking.status !== "cancelled") {
+      // Once payment is captured, the transaction is effectively complete
+      // You might want to set it to 'completed' here if the capture happens after return
+      await Booking.updateStatus(booking_id, "completed");
+      console.log(`[Webhook] updated booking status to completed: ${booking_id}`);
     }
   } catch (error) {
     console.error("[Webhook] error handling payment_intent.succeeded:", error);
+  }
+}
+
+// Helper: Handle payment intent canceled
+async function handlePaymentIntentCanceled(paymentIntent) {
+  try {
+    const booking_id = paymentIntent.metadata.booking_id;
+
+    console.log(
+      `[Webhook] payment_intent.canceled for booking: ${booking_id}`,
+    );
+
+    // Update payment record
+    const payment = await Payment.findByBookingId(booking_id);
+    if (payment && payment.status !== "cancelled") {
+      const [updatedPayment] = await Payment.updateStatus(
+        payment.id,
+        "cancelled",
+      );
+      console.log(
+        `[Webhook] updated payment status to cancelled: ${updatedPayment.id}`,
+      );
+    }
+  } catch (error) {
+    console.error("[Webhook] error handling payment_intent.canceled:", error);
   }
 }
 

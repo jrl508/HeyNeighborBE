@@ -29,21 +29,50 @@ const Booking = {
     db("bookings")
       .where({ renter_id: userId })
       .orWhere({ owner_id: userId })
-      .select("*")
-      .orderBy("created_at", "desc"),
+      .leftJoin("payments", "bookings.id", "payments.booking_id")
+      .leftJoin("tools", "bookings.tool_id", "tools.id")
+      .leftJoin("users as renter", "bookings.renter_id", "renter.id")
+      .leftJoin("users as owner", "bookings.owner_id", "owner.id")
+      .select(
+        "bookings.*",
+        "payments.status as payment_status",
+        "payments.amount as payment_amount",
+        "tools.name as tool_name",
+        "tools.image_url as tool_image",
+        db.raw("renter.first_name as renter_first_name"),
+        db.raw("renter.last_name as renter_last_name"),
+        db.raw("owner.first_name as owner_first_name"),
+        db.raw("owner.last_name as owner_last_name"),
+      )
+      .orderBy("bookings.created_at", "desc"),
 
   // Get bookings for a user as renter
   findByRenterId: (renterId) =>
     db("bookings")
       .where({ renter_id: renterId })
-      .select("*")
+      .leftJoin("payments", "bookings.id", "payments.booking_id")
+      .leftJoin("tools", "bookings.tool_id", "tools.id")
+      .select(
+        "bookings.*",
+        "payments.status as payment_status",
+        "tools.name as tool_name",
+      )
       .orderBy("start_date"),
 
   // Get bookings for a user as owner
   findByOwnerId: (ownerId) =>
     db("bookings")
       .where({ owner_id: ownerId })
-      .select("*")
+      .leftJoin("payments", "bookings.id", "payments.booking_id")
+      .leftJoin("tools", "bookings.tool_id", "tools.id")
+      .leftJoin("users as renter", "bookings.renter_id", "renter.id")
+      .select(
+        "bookings.*",
+        "payments.status as payment_status",
+        "tools.name as tool_name",
+        db.raw("renter.first_name as renter_first_name"),
+        db.raw("renter.last_name as renter_last_name"),
+      )
       .orderBy("start_date"),
 
   // Get all bookings for a specific tool

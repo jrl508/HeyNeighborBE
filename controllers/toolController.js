@@ -34,7 +34,15 @@ const ToolController = {
   updateTool: async (req, res) => {
     try {
       const { id } = req.params;
-      const updates = req.body;
+      const updates = { ...req.body };
+
+      // If a new image was uploaded, update the image_url
+      if (req.file) {
+        updates.image_url = `${req.protocol}://${req.get("host")}/uploads/${
+          req.file.filename
+        }`;
+      }
+
       const updatedTool = await Tool.update(id, updates);
       res.status(200).json(updatedTool);
     } catch (error) {

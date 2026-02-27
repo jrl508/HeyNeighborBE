@@ -99,7 +99,7 @@ const BookingController = {
         delivery_required,
         delivery_fee,
         deposit_amount,
-        status: "requested",
+        status: "pending_payment",
       };
 
       const [booking] = await Booking.create(bookingData);
@@ -248,7 +248,38 @@ const BookingController = {
     }
   },
 
-  // PATCH /api/bookings/:id/complete - Mark booking as completed
+  // PATCH /api/bookings/:id/return - Renter marks tool as returned
+  returnBooking: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const booking = await Booking.findById(id);
+
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      // Only renter can initiate return
+      if (booking.renter_id !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized: only the renter can mark a tool as returned" });
+      }
+
+      if (booking.status !== "active") {
+        return res.status(400).json({ message: "Only active rentals can be marked as returned" });
+      }
+
+      const [updatedBooking] = await Booking.updateStatus(id, "returning");
+
+      res.status(200).json({
+        booking: updatedBooking,
+        message: "Tool marked as returned. Waiting for owner to confirm receipt.",
+      });
+    } catch (error) {
+      console.error("Error returning booking:", error);
+      res.status(500).json({ message: "Error marking tool as returned" });
+    }
+  },
+
+  // PATCH /api/bookings/:id/complete - Mark booking as completed (Owner confirms receipt)
   completeBooking: async (req, res) => {
     try {
       const { id } = req.params;
@@ -258,23 +289,31 @@ const BookingController = {
         return res.status(404).json({ message: "Booking not found" });
       }
 
-      if (!["active", "confirmed"].includes(booking.status)) {
+      // Only owner can complete booking (confirm receipt)
+      if (booking.owner_id !== req.user.id) {
+        return res.status(403).json({ message: "Unauthorized: only the owner can complete the booking" });
+      }
+
+      if (!["active", "returning", "confirmed"].includes(booking.status)) {
         return res.status(400).json({
-          message: "Only active or confirmed bookings can be completed",
+          message: "Only active or returning bookings can be completed",
         });
       }
 
       const [updatedBooking] = await Booking.updateStatus(id, "completed");
 
       // Update payment status to reflect completion (ready for settlement)
-      await Payment.updateStatus(
-        (await Payment.findByBookingId(id)).id,
-        "completed",
-      );
+      const payment = await Payment.findByBookingId(id);
+      if (payment) {
+        await Payment.updateStatus(payment.id, "completed");
+      }
+
+      // Remove availability block for this booking
+      await ToolAvailability.deleteByBookingId(id);
 
       res.status(200).json({
         booking: updatedBooking,
-        message: "Booking completed",
+        message: "Booking completed and receipt confirmed.",
       });
     } catch (error) {
       console.error("Error completing booking:", error);
@@ -335,9 +374,18 @@ const BookingController = {
         }
       }
 
+      // Set tool back to available
+      if (booking.tool_id) {
+        await Tool.update(booking.tool_id, { available: true });
+        console.log(`[cancelBooking] set tool ${booking.tool_id} back to available.`);
+      }
+
+      // Remove availability block for this booking
+      await ToolAvailability.deleteByBookingId(id);
+
       res.status(200).json({
         booking: updatedBooking,
-        message: "Booking cancelled",
+        message: "Booking cancelled and tool is now available again.",
       });
     } catch (error) {
       console.error("Error cancelling booking:", error);
