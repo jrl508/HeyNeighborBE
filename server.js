@@ -9,6 +9,7 @@ const bookingRoutes = require("./routes/bookingRoutes");
 const localBusinessRoutes = require("./routes/localBusinessRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const messageRoutes = require("./routes/messageRoutes");
+const reviewRoutes = require("./routes/reviewRoutes");
 const { initSocket } = require("./socket");
 const path = require("path");
 const app = express();
@@ -49,6 +50,7 @@ app.use("/api/bookings", bookingRoutes);
 app.use("/api/local-businesses", localBusinessRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/messaging", messageRoutes);
+app.use("/api", reviewRoutes);
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
