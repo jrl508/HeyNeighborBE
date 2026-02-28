@@ -94,6 +94,7 @@ const Tool = {
     return query
       .select(
         "tools.*",
+        "users.average_rating as owner_average_rating",
         db.raw(
           `
           (3959 * acos(
