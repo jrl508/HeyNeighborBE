@@ -17,6 +17,7 @@ const User = {
         "created_at",
         "updated_at",
         "profile_image",
+        "average_rating",
       )
       .where({ id: userId })
       .first();
@@ -100,6 +101,12 @@ const User = {
     return db("user_blocks")
       .where({ blocked_id: userId })
       .select("blocker_id");
+  },
+
+  updateAverageRating: async (userId, newAverageRating) => {
+    return db("users")
+      .where({ id: userId })
+      .update({ average_rating: newAverageRating });
   },
 };
 

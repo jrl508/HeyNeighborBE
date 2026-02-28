@@ -100,6 +100,7 @@ const loginUser = async (req, res) => {
       lng,
       city,
       state,
+      average_rating,
     } = user;
     // Generate JWT token
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
@@ -121,6 +122,7 @@ const loginUser = async (req, res) => {
         lng,
         city,
         state,
+        average_rating,
       },
     });
   } catch (err) {
