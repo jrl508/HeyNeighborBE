@@ -65,8 +65,8 @@ const BookingController = {
       const owner_id = tool.user_id;
 
       // Check if renter or owner is blocked
-      const isBlocked = await User.isBlocked(renter_id, owner_id);
-      if (isBlocked) {
+      const blockStatus = await User.isBlocked(renter_id, owner_id);
+      if (blockStatus.isBlocked) {
         return res.status(403).json({ message: "Booking forbidden: renter or owner is blocked." });
       }
 
@@ -119,16 +119,6 @@ const BookingController = {
       };
 
       const [booking] = await Booking.create(bookingData);
-
-      // Block tool availability for booking period
-      await Tool.update(tool_id, { available: false });
-      await ToolAvailability.create({
-        tool_id,
-        blocked_start: start_date,
-        blocked_end: end_date,
-        reason: "booking",
-        notes: `Booking ID ${booking.id}`,
-      });
 
       // Create payment record
       const paymentData = {
@@ -250,6 +240,15 @@ const BookingController = {
         delivery_status: deliveryStatus,
         delivery_fee: deliveryFee,
         total_amount: finalAmount
+      });
+
+      // Block tool availability for booking period
+      await ToolAvailability.create({
+        tool_id: updatedBooking.tool_id,
+        blocked_start: updatedBooking.start_date,
+        blocked_end: updatedBooking.end_date,
+        reason: "booking",
+        notes: `Booking ID ${updatedBooking.id}`,
       });
 
       res.status(200).json({
@@ -519,6 +518,130 @@ const BookingController = {
     } catch (error) {
       console.error("Error fetching tool bookings:", error);
       res.status(500).json({ message: "Error fetching tool bookings" });
+    }
+  },
+
+  // POST /api/bookings/:id/reschedule - Renter requests a reschedule
+  rescheduleBooking: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { new_start_date, new_end_date } = req.body;
+      const renter_id = req.user.id;
+
+      if (!new_start_date || !new_end_date) {
+        return res.status(400).json({ message: "New start and end dates are required" });
+      }
+
+      const dateError = validateDateRange(new_start_date, new_end_date);
+      if (dateError) {
+        return res.status(400).json({ message: dateError });
+      }
+
+      const booking = await Booking.findById(id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      if (booking.renter_id !== renter_id) {
+        return res.status(403).json({ message: "Only the renter can request a reschedule" });
+      }
+
+      if (booking.status !== "confirmed") {
+        return res.status(400).json({ message: "Only confirmed bookings can be rescheduled" });
+      }
+
+      // Check for conflicts with new dates (excluding current booking)
+      const hasConflict = await Booking.hasConflict(booking.tool_id, new_start_date, new_end_date, id);
+      const hasAvailabilityConflict = await ToolAvailability.hasConflict(booking.tool_id, new_start_date, new_end_date);
+      
+      if (hasConflict || hasAvailabilityConflict) {
+        return res.status(409).json({ message: "New dates are not available" });
+      }
+
+      const [updatedBooking] = await Booking.update(id, {
+        status: "reschedule_pending",
+        new_start_date,
+        new_end_date,
+      });
+
+      res.status(200).json({
+        booking: updatedBooking,
+        message: "Reschedule request sent to owner.",
+      });
+    } catch (error) {
+      console.error("Error rescheduling booking:", error);
+      res.status(500).json({ message: "Error rescheduling booking" });
+    }
+  },
+
+  // PATCH /api/bookings/:id/reschedule/respond - Owner responds to reschedule request
+  respondToReschedule: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { action } = req.body; // 'accept' or 'decline'
+      const owner_id = req.user.id;
+
+      const booking = await Booking.findById(id);
+      if (!booking) {
+        return res.status(404).json({ message: "Booking not found" });
+      }
+
+      if (booking.owner_id !== owner_id) {
+        return res.status(403).json({ message: "Only the owner can respond to reschedule requests" });
+      }
+
+      if (booking.status !== "reschedule_pending") {
+        return res.status(400).json({ message: "No pending reschedule request found" });
+      }
+
+      if (action === "accept") {
+        // Double check availability one last time
+        const hasConflict = await Booking.hasConflict(booking.tool_id, booking.new_start_date, booking.new_end_date, id);
+        const hasAvailabilityConflict = await ToolAvailability.hasConflict(booking.tool_id, booking.new_start_date, booking.new_end_date);
+        
+        if (hasConflict || hasAvailabilityConflict) {
+          return res.status(409).json({ message: "Proposed dates are no longer available" });
+        }
+
+        // Update booking with new dates and clear pending fields
+        const [updatedBooking] = await Booking.update(id, {
+          start_date: booking.new_start_date,
+          end_date: booking.new_end_date,
+          status: "confirmed",
+          new_start_date: null,
+          new_end_date: null,
+        });
+
+        // Update availability block
+        await ToolAvailability.deleteByBookingId(id);
+        await ToolAvailability.create({
+          tool_id: updatedBooking.tool_id,
+          blocked_start: updatedBooking.start_date,
+          blocked_end: updatedBooking.end_date,
+          reason: "booking",
+          notes: `Booking ID ${updatedBooking.id}`,
+        });
+
+        res.status(200).json({
+          booking: updatedBooking,
+          message: "Reschedule request accepted and dates updated.",
+        });
+      } else {
+        // Decline: revert to confirmed status and clear pending fields
+        const [updatedBooking] = await Booking.update(id, {
+          status: "confirmed",
+          new_start_date: null,
+          new_end_date: null,
+        });
+
+        res.status(200).json({
+          booking: updatedBooking,
+          message: "Reschedule request declined. Original dates kept.",
+        });
+      }
+    } catch (error) {
+      console.error("Error responding to reschedule:", error);
+      res.status(500).json({ message: "Error responding to reschedule request" });
     }
   },
 };

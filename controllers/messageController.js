@@ -38,8 +38,8 @@ const messageController = {
       let conversationId = conversation_id;
 
       // Check for blocks before proceeding
-      const isBlocked = await User.isBlocked(sender_id, receiver_id);
-      if (isBlocked) {
+      const blockStatus = await User.isBlocked(sender_id, receiver_id);
+      if (blockStatus.isBlocked) {
         return res.status(403).json({ message: "Cannot send message: sender or receiver is blocked" });
       }
 

@@ -54,8 +54,8 @@ const initSocket = (server) => {
         const Message = require("./models/messageModel"); // require here to avoid circular dependency
 
         // Check for blocks before proceeding
-        const isBlocked = await User.isBlocked(sender_id, receiver_id);
-        if (isBlocked) {
+        const blockStatus = await User.isBlocked(sender_id, receiver_id);
+        if (blockStatus.isBlocked) {
           return socket.emit("error", { message: "Cannot send message: sender or receiver is blocked" });
         }
         

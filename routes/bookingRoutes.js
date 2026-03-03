@@ -49,4 +49,10 @@ router.get(
   BookingController.getToolBookings,
 );
 
+// Reschedule a booking (renter request)
+router.post("/:id/reschedule", authMiddleware, BookingController.rescheduleBooking);
+
+// Respond to reschedule (owner accept/decline)
+router.patch("/:id/reschedule/respond", authMiddleware, BookingController.respondToReschedule);
+
 module.exports = router;

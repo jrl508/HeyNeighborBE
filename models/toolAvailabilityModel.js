@@ -5,6 +5,10 @@ const ToolAvailability = {
   create: (availabilityData) =>
     db("tool_availability").insert(availabilityData).returning("*"),
 
+  // Get availability block by ID
+  findById: (id) =>
+    db("tool_availability").where({ id }).first(),
+
   // Get all blocked periods for a tool
   findByToolId: (toolId) =>
     db("tool_availability")
