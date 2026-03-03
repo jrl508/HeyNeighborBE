@@ -103,6 +103,84 @@ const ToolController = {
       });
     }
   },
+
+  // Get tool availability (blocked date ranges)
+  getToolAvailability: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const ToolAvailability = require("../models/toolAvailabilityModel");
+      
+      const availability = await ToolAvailability.findByToolId(id);
+      
+      // Map to a cleaner format if necessary, though select("*") is already pretty clean
+      const blockedRanges = availability.map(range => ({
+        id: range.id,
+        start: range.blocked_start,
+        end: range.blocked_end,
+        reason: range.reason
+      }));
+
+      res.status(200).json(blockedRanges);
+    } catch (error) {
+      console.error("Error fetching tool availability:", error);
+      res.status(500).json({ message: "Error fetching tool availability" });
+    }
+  },
+
+  // Add tool availability block (owner blackout)
+  addToolAvailability: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { start_date, end_date, reason, notes } = req.body;
+      const owner_id = req.user.id;
+      const ToolAvailability = require("../models/toolAvailabilityModel");
+
+      // Verify ownership
+      const tool = await Tool.findById(id);
+      if (!tool || tool.user_id !== owner_id) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const [newBlock] = await ToolAvailability.create({
+        tool_id: id,
+        blocked_start: start_date,
+        blocked_end: end_date,
+        reason: reason || "owner_unavailable",
+        notes: notes || "Manual owner blackout",
+      });
+
+      res.status(201).json(newBlock);
+    } catch (error) {
+      console.error("Error adding tool availability:", error);
+      res.status(500).json({ message: "Error adding tool availability" });
+    }
+  },
+
+  // Delete tool availability block
+  deleteToolAvailability: async (req, res) => {
+    try {
+      const { id } = req.params; // availability block ID
+      const owner_id = req.user.id;
+      const ToolAvailability = require("../models/toolAvailabilityModel");
+
+      // Find the block first to check ownership of the tool
+      const availability = await ToolAvailability.findById(id);
+      if (!availability) {
+        return res.status(404).json({ message: "Availability block not found" });
+      }
+
+      const tool = await Tool.findById(availability.tool_id);
+      if (!tool || tool.user_id !== owner_id) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      await ToolAvailability.delete(id);
+      res.status(200).json({ message: "Availability block deleted" });
+    } catch (error) {
+      console.error("Error deleting tool availability:", error);
+      res.status(500).json({ message: "Error deleting tool availability" });
+    }
+  },
 };
 
 module.exports = ToolController;

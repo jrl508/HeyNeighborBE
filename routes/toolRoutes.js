@@ -18,6 +18,9 @@ router.patch(
   upload.single("tool_image"),
   ToolController.updateTool
 ); // Update a tool
+router.get("/:id/availability", authMiddleware, ToolController.getToolAvailability); // Get tool availability
+router.post("/:id/availability", authMiddleware, ToolController.addToolAvailability); // Add tool availability block
+router.delete("/availability/:id", authMiddleware, ToolController.deleteToolAvailability); // Delete tool availability block
 router.delete("/:id", authMiddleware, ToolController.deleteTool); // Delete a tool
 
 module.exports = router;
