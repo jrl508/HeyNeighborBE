@@ -36,6 +36,13 @@ router.patch(
   BookingController.completeBooking,
 );
 
+// Claim security deposit (owner action)
+router.post(
+  "/:id/claim-deposit",
+  authMiddleware,
+  BookingController.claimDeposit,
+);
+
 // Cancel a booking (requires auth)
 router.delete("/:id", authMiddleware, BookingController.cancelBooking);
 

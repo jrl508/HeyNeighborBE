@@ -1,7 +1,9 @@
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const Payment = require("../models/paymentModel");
 const Booking = require("../models/bookingModel");
+const User = require("../models/userModel");
 const ToolAvailability = require("../models/toolAvailabilityModel");
+const db = require("../database/db");
 
 const PaymentController = {
   // POST /api/payments/intent - Create a Stripe PaymentIntent for a booking
@@ -14,99 +16,104 @@ const PaymentController = {
         return res.status(400).json({ message: "booking_id is required" });
       }
 
-      console.log(
-        `[POST /payments/intent] user=${userId} booking_id=${booking_id}`,
-      );
+      console.log(`[POST /payments/intent] user=${userId} booking_id=${booking_id}`);
 
       // Get the booking
       const booking = await Booking.findById(booking_id);
       if (!booking) {
-        console.error(
-          `[POST /payments/intent] booking not found: ${booking_id}`,
-        );
+        console.error(`[POST /payments/intent] booking not found: ${booking_id}`);
         return res.status(404).json({ message: "Booking not found" });
       }
 
       // Verify user is the renter
       if (booking.renter_id !== userId) {
-        console.error(
-          `[POST /payments/intent] unauthorized: user=${userId} renter=${booking.renter_id}`,
-        );
+        console.error(`[POST /payments/intent] unauthorized: user=${userId} renter=${booking.renter_id}`);
         return res.status(403).json({ message: "Unauthorized" });
       }
 
       // Get the payment record
       let payment = await Payment.findByBookingId(booking_id);
       if (!payment) {
-        console.error(
-          `[POST /payments/intent] payment not found for booking: ${booking_id}`,
-        );
+        console.error(`[POST /payments/intent] payment not found for booking: ${booking_id}`);
         return res.status(404).json({ message: "Payment record not found" });
       }
 
-      // Create or retrieve PaymentIntent
-      let paymentIntent;
-      if (
-        payment.stripe_payment_intent_id &&
-        payment.status !== "failed" &&
-        payment.status !== "requires_payment_method"
-      ) {
-        // Retrieve existing PaymentIntent if still valid
-        try {
-          paymentIntent = await stripe.paymentIntents.retrieve(
-            payment.stripe_payment_intent_id,
-          );
-          console.log(
-            `[POST /payments/intent] retrieved existing intent: ${paymentIntent.id}`,
-          );
-        } catch (err) {
-          console.log(
-            `[POST /payments/intent] existing intent invalid, creating new one`,
-          );
-          paymentIntent = null;
-        }
-      }
+      // Calculate amounts
+      const totalAmount = parseFloat(payment.amount);
+      const depositAmount = parseFloat(booking.deposit_amount) || 0;
+      const rentalAmount = totalAmount - depositAmount;
 
-      // Create new PaymentIntent if needed
-      if (!paymentIntent) {
-        paymentIntent = await stripe.paymentIntents.create({
-          amount: Math.round(payment.amount * 100), // Convert to cents
-          currency: payment.currency.toLowerCase(),
-          metadata: {
-            booking_id: booking_id.toString(),
-            renter_id: userId.toString(),
-            owner_id: booking.owner_id.toString(),
-            tool_id: booking.tool_id.toString(),
-          },
-          automatic_payment_methods: {
-            enabled: true,
-          },
-          capture_method: "manual", // ADD THIS: Enable delayed capture
+      console.log(`[POST /payments/intent] rental=${rentalAmount} deposit=${depositAmount} total=${totalAmount}`);
+
+      // Get or create Stripe Customer
+      const user = await User.getUserById(userId);
+      let customerId = user.stripe_customer_id;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: `${user.first_name} ${user.last_name}`,
+          metadata: { userId: userId.toString() }
         });
-
-        console.log(
-          `[POST /payments/intent] created new intent: ${paymentIntent.id}`,
-        );
-
-        // Update payment with Stripe intent ID
-        [payment] = await Payment.setStripeIntentId(
-          payment.id,
-          paymentIntent.id,
-        );
-        console.log(
-          `[POST /payments/intent] updated payment with intent id: ${payment.id}`,
-        );
+        customerId = customer.id;
+        await User.updateStripeCustomerId(userId, customerId);
+        console.log(`[POST /payments/intent] created new Stripe Customer: ${customerId}`);
       }
+
+      // Create two Stripe PaymentIntents associated with the customer
+      const intentRental = await stripe.paymentIntents.create({
+        amount: Math.round(rentalAmount * 100),
+        currency: payment.currency.toLowerCase(),
+        customer: customerId,
+        setup_future_usage: 'on_session', // Allow reuse of the PaymentMethod for the deposit
+        metadata: {
+          booking_id: booking_id.toString(),
+          type: 'rental_fee',
+          renter_id: userId.toString(),
+          owner_id: booking.owner_id.toString(),
+          tool_id: booking.tool_id.toString(),
+        },
+        automatic_payment_methods: { enabled: true },
+        capture_method: "manual",
+      });
+
+      const intentDeposit = await stripe.paymentIntents.create({
+        amount: Math.round(depositAmount * 100),
+        currency: payment.currency.toLowerCase(),
+        customer: customerId,
+        metadata: {
+          booking_id: booking_id.toString(),
+          type: 'security_deposit',
+          renter_id: userId.toString(),
+          owner_id: booking.owner_id.toString(),
+          tool_id: booking.tool_id.toString(),
+        },
+        automatic_payment_methods: { enabled: true },
+        capture_method: "manual",
+      });
+
+      console.log(`[POST /payments/intent] created intents: rental=${intentRental.id} deposit=${intentDeposit.id}`);
+
+      // Update payment with both Stripe intent IDs and individual amounts
+      [payment] = await Payment.setDualIntents(
+        payment.id,
+        intentRental.id,
+        intentDeposit.id,
+        rentalAmount,
+        depositAmount
+      );
 
       res.status(200).json({
         payment,
-        clientSecret: paymentIntent.client_secret,
-        paymentIntentId: paymentIntent.id,
+        clientSecret: intentRental.client_secret, // Primary for the first payment flow step
+        depositClientSecret: intentDeposit.client_secret,
+        paymentIntentId: intentRental.id,
+        depositIntentId: intentDeposit.id,
       });
     } catch (error) {
       console.error("[POST /payments/intent] error=", error);
       res.status(500).json({
-        message: "Error creating payment intent",
+        message: "Error creating payment intents",
         error: error.message,
       });
     }
@@ -115,73 +122,67 @@ const PaymentController = {
   // POST /api/payments/confirm - Confirm payment after Stripe processing
   confirmPayment: async (req, res) => {
     try {
-      const { booking_id, stripe_payment_intent_id } = req.body;
+      const { booking_id, stripe_payment_intent_id, stripe_deposit_intent_id } = req.body;
       const userId = req.user.id;
 
-      if (!booking_id || !stripe_payment_intent_id) {
+      if (!booking_id || !stripe_payment_intent_id || !stripe_deposit_intent_id) {
         return res.status(400).json({
-          message: "booking_id and stripe_payment_intent_id are required",
+          message: "booking_id, stripe_payment_intent_id and stripe_deposit_intent_id are required",
         });
       }
 
       console.log(
-        `[POST /payments/confirm] user=${userId} booking_id=${booking_id} intent=${stripe_payment_intent_id}`,
+        `[POST /payments/confirm] user=${userId} booking_id=${booking_id} intent=${stripe_payment_intent_id} depositIntent=${stripe_deposit_intent_id}`,
       );
 
-      // Verify PaymentIntent with Stripe
-      const paymentIntent = await stripe.paymentIntents.retrieve(
-        stripe_payment_intent_id,
-      );
+      // Verify Rental PaymentIntent with Stripe
+      const paymentIntent = await stripe.paymentIntents.retrieve(stripe_payment_intent_id);
+      
+      // Verify Deposit PaymentIntent with Stripe
+      const depositIntent = await stripe.paymentIntents.retrieve(stripe_deposit_intent_id);
 
-      console.log(
-        `[POST /payments/confirm] intent status: ${paymentIntent.status}`,
-      );
+      console.log(`[POST /payments/confirm] intent status: ${paymentIntent.status}, deposit status: ${depositIntent.status}`);
 
-      // Check if payment was authorized (not succeeded yet)
+      // Check if both intents were authorized (not succeeded yet)
       if (paymentIntent.status !== "requires_capture") {
-        console.error(
-          `[POST /payments/confirm] payment not authorized: status=${paymentIntent.status}`,
-        );
         return res.status(400).json({
-          message: `Payment was not authorized. Status: ${paymentIntent.status}`,
+          message: `Rental payment was not authorized. Status: ${paymentIntent.status}`,
+        });
+      }
+      
+      if (depositIntent.status !== "requires_capture") {
+        return res.status(400).json({
+          message: `Security deposit was not authorized. Status: ${depositIntent.status}`,
         });
       }
 
-      // Get booking and payment
+      // Get booking
       const booking = await Booking.findById(booking_id);
       if (!booking) {
-        console.error(
-          `[POST /payments/confirm] booking not found: ${booking_id}`,
-        );
         return res.status(404).json({ message: "Booking not found" });
       }
 
       // Verify user is the renter
       if (booking.renter_id !== userId) {
-        console.error(
-          `[POST /payments/confirm] unauthorized: user=${userId} renter=${booking.renter_id}`,
-        );
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // Update payment status to authorized (pending capture)
+      // Update payment record: status = authorized, deposit_status = authorized
       const paymentRecord = await Payment.findByBookingId(booking_id);
-      const [payment] = await Payment.updateStatus(
-        paymentRecord.id,
-        "authorized",
-      );
+      await Payment.update(paymentRecord.id, {
+        status: "authorized",
+        deposit_status: "authorized",
+        updated_at: db.fn.now()
+      });
 
       // Transition booking to 'requested' (now secured by payment)
       await Booking.updateStatus(booking_id, "requested");
 
-      console.log(
-        `[POST /payments/confirm] payment authorized & booking requested: payment_id=${payment.id} booking_id=${booking_id}`,
-      );
+      console.log(`[POST /payments/confirm] payment & deposit authorized & booking requested: booking_id=${booking_id}`);
 
       res.status(200).json({
         booking: { ...booking, status: "requested" },
-        payment,
-        message: "Payment authorized successfully, booking request sent to owner.",
+        message: "Rental fee and security deposit authorized successfully. Booking request sent to owner.",
       });
     } catch (error) {
       console.error("[POST /payments/confirm] error=", error);

@@ -26,6 +26,16 @@ const Payment = {
       })
       .returning("*"),
 
+  // Update deposit status
+  updateDepositStatus: (id, depositStatus) =>
+    db("payments")
+      .where({ id })
+      .update({
+        deposit_status: depositStatus,
+        updated_at: db.fn.now(),
+      })
+      .returning("*"),
+
   // Update payment record
   update: (id, updates) =>
     db("payments")
@@ -42,6 +52,19 @@ const Payment = {
       .where({ id })
       .update({
         stripe_payment_intent_id: stripeIntentId,
+        updated_at: db.fn.now(),
+      })
+      .returning("*"),
+
+  // Update with Dual Stripe intent IDs and amounts
+  setDualIntents: (id, rentalIntentId, depositIntentId, rentalAmount, depositAmount) =>
+    db("payments")
+      .where({ id })
+      .update({
+        stripe_payment_intent_id: rentalIntentId,
+        stripe_deposit_intent_id: depositIntentId,
+        rental_amount: rentalAmount,
+        deposit_amount: depositAmount,
         updated_at: db.fn.now(),
       })
       .returning("*"),

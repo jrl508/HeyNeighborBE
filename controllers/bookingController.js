@@ -212,13 +212,13 @@ const BookingController = {
         return res.status(400).json({ message: "Valid payment intent not found for this booking." });
       }
 
-      let finalAmount = payment.amount;
+      let rentalCaptureAmount = parseFloat(payment.rental_amount);
       let deliveryStatus = booking.delivery_status;
       let deliveryFee = booking.delivery_fee;
 
       if (booking.delivery_status === 'requested') {
         if (deliveryDecision === 'reject') {
-          finalAmount = parseFloat(booking.total_amount) - parseFloat(booking.delivery_fee);
+          rentalCaptureAmount = rentalCaptureAmount - parseFloat(booking.delivery_fee);
           deliveryStatus = 'rejected';
           deliveryFee = 0;
         } else { // 'accept'
@@ -226,20 +226,29 @@ const BookingController = {
         }
       }
       
-      // Capture payment with final amount
+      // Capture RENTAL payment only
       const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
       await stripe.paymentIntents.capture(payment.stripe_payment_intent_id, {
-        amount_to_capture: Math.round(finalAmount * 100), // convert to cents
+        amount_to_capture: Math.round(rentalCaptureAmount * 100), // convert to cents
       });
 
       // Update local records
-      await Payment.update(payment.id, { amount: finalAmount, status: 'succeeded' });
+      // Note: total_amount in booking and payment should reflect actual cost (rental + deposit hold)
+      // but here we update payment.status to 'succeeded' for the rental portion.
+      // We'll keep deposit_status as 'authorized'.
+      const newTotalAmount = rentalCaptureAmount + parseFloat(payment.deposit_amount);
+      await Payment.update(payment.id, { 
+        amount: newTotalAmount, 
+        rental_amount: rentalCaptureAmount,
+        status: 'succeeded' 
+      });
+
       const [updatedBooking] = await Booking.update(id, {
         status: "confirmed",
         confirmed_at: db.fn.now(),
         delivery_status: deliveryStatus,
         delivery_fee: deliveryFee,
-        total_amount: finalAmount
+        total_amount: newTotalAmount
       });
 
       // Block tool availability for booking period
@@ -364,6 +373,32 @@ const BookingController = {
       if (payment) {
         // 'succeeded' is the final state in our enum for captured payments
         await Payment.updateStatus(payment.id, "succeeded");
+
+        // The Security Deposit (stripe_deposit_intent_id) remains authorized.
+        // In a real application, you'd trigger a 48h scheduled task here to call
+        // stripe.paymentIntents.cancel(payment.stripe_deposit_intent_id) 
+        // to release the hold if no claim is filed.
+        // For now, we update deposit_status to reflect it's pending release.
+        if (payment.deposit_status === 'authorized') {
+          await Payment.updateDepositStatus(payment.id, 'authorized'); // still authorized until released or claimed
+          
+          // AUTO-RELEASE SIMULATION: Release in 48 hours
+          // Note: In production, use a persistent background worker (BullMQ, Cron)
+          const RELEASE_DELAY = 48 * 60 * 60 * 1000; // 48 hours
+          setTimeout(async () => {
+            try {
+              const currentPayment = await Payment.findById(payment.id);
+              if (currentPayment && currentPayment.deposit_status === 'authorized') {
+                const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+                await stripe.paymentIntents.cancel(currentPayment.stripe_deposit_intent_id);
+                await Payment.updateDepositStatus(currentPayment.id, 'released');
+                console.log(`[Auto-Release] Deposit released for booking ${id}`);
+              }
+            } catch (err) {
+              console.error(`[Auto-Release] Failed to release deposit for booking ${id}:`, err.message);
+            }
+          }, RELEASE_DELAY);
+        }
       }
 
       // Remove availability block for this booking
@@ -371,11 +406,57 @@ const BookingController = {
 
       res.status(200).json({
         booking: updatedBooking,
-        message: "Booking completed and tool receipt confirmed.",
+        message: "Booking completed. Security deposit will be released in 48 hours if no damage claim is filed.",
       });
     } catch (error) {
       console.error("Error completing booking:", error);
       res.status(500).json({ message: "Error completing booking" });
+    }
+  },
+
+  // POST /api/bookings/:id/claim-deposit - Owner initiates a claim against the security deposit
+  claimDeposit: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { amount, reason } = req.body; // amount is the portion of the deposit to claim
+      const userId = req.user.id;
+
+      const booking = await Booking.findById(id);
+      if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+      if (booking.owner_id !== userId) {
+        return res.status(403).json({ message: "Unauthorized: only the owner can claim the deposit" });
+      }
+
+      const payment = await Payment.findByBookingId(id);
+      if (!payment || payment.deposit_status !== 'authorized') {
+        return res.status(400).json({ message: "No active deposit authorization found" });
+      }
+
+      const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+      const claimAmount = amount ? parseFloat(amount) : parseFloat(payment.deposit_amount);
+
+      if (claimAmount > parseFloat(payment.deposit_amount)) {
+        return res.status(400).json({ message: "Claim amount cannot exceed deposit amount" });
+      }
+
+      // Capture specified amount from deposit hold
+      await stripe.paymentIntents.capture(payment.stripe_deposit_intent_id, {
+        amount_to_capture: Math.round(claimAmount * 100),
+      });
+
+      await Payment.update(payment.id, {
+        deposit_status: 'captured',
+        deposit_amount: claimAmount, // actual amount captured
+      });
+
+      res.status(200).json({
+        message: `Successfully claimed $${claimAmount.toFixed(2)} from security deposit.`,
+        reason
+      });
+    } catch (error) {
+      console.error("Error claiming deposit:", error);
+      res.status(500).json({ message: "Error claiming deposit", error: error.message });
     }
   },
 

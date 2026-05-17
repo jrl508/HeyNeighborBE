@@ -18,9 +18,17 @@ const User = {
         "updated_at",
         "profile_image",
         "average_rating",
+        "stripe_customer_id",
       )
       .where({ id: userId })
       .first();
+  },
+
+  updateStripeCustomerId: async (userId, stripeCustomerId) => {
+    return db("users")
+      .where({ id: userId })
+      .update({ stripe_customer_id: stripeCustomerId })
+      .returning("stripe_customer_id");
   },
 
   getUserByEmail: async (email) => {

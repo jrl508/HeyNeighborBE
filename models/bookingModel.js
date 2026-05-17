@@ -37,6 +37,8 @@ const Booking = {
         "bookings.*",
         "payments.status as payment_status",
         "payments.amount as payment_amount",
+        "payments.deposit_status",
+        "payments.deposit_amount",
         "tools.name as tool_name",
         "tools.image_url as tool_image",
         db.raw("renter.first_name as renter_first_name"),
@@ -55,6 +57,8 @@ const Booking = {
       .select(
         "bookings.*",
         "payments.status as payment_status",
+        "payments.deposit_status",
+        "payments.deposit_amount",
         "tools.name as tool_name",
       )
       .orderBy("start_date"),
@@ -69,6 +73,8 @@ const Booking = {
       .select(
         "bookings.*",
         "payments.status as payment_status",
+        "payments.deposit_status",
+        "payments.deposit_amount",
         "tools.name as tool_name",
         db.raw("renter.first_name as renter_first_name"),
         db.raw("renter.last_name as renter_last_name"),
