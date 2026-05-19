@@ -37,6 +37,7 @@ const Booking = {
         "bookings.*",
         "payments.status as payment_status",
         "payments.amount as payment_amount",
+        "payments.rental_amount",
         "payments.deposit_status",
         "payments.deposit_amount",
         "tools.name as tool_name",
