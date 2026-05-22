@@ -1,6 +1,7 @@
 const Message = require("../models/messageModel");
 const User = require("../models/userModel");
 const { getIO } = require("../socket");
+const { createNotification } = require("../utils/notificationUtils");
 
 const messageController = {
   // Get all conversations for the logged-in user
@@ -61,6 +62,16 @@ const messageController = {
         conversation_id: conversationId,
         sender_id,
         content,
+      });
+
+      // Create persistence notification
+      await createNotification({
+        user_id: receiver_id,
+        actor_id: sender_id,
+        type: "new_message",
+        entity_type: "message",
+        entity_id: message.id,
+        content: content.substring(0, 50) + (content.length > 50 ? "..." : "")
       });
 
       // Emit via socket if possible
