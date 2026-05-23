@@ -4,6 +4,7 @@ const ToolAvailability = require("../models/toolAvailabilityModel");
 const Tool = require("../models/toolModel");
 const User = require("../models/userModel");
 const db = require("../database/db");
+const { createNotification } = require("../utils/notificationUtils");
 
 // Helper: Calculate days between two dates
 const calculateDays = (startDate, endDate) => {
@@ -130,6 +131,16 @@ const BookingController = {
 
       const [payment] = await Payment.create(paymentData);
 
+      // Notify Owner of new request
+      await createNotification({
+        user_id: owner_id,
+        actor_id: renter_id,
+        type: "booking_requested",
+        entity_type: "booking",
+        entity_id: booking.id,
+        content: `New rental request for your ${tool.name}!`
+      });
+
       res.status(201).json({
         booking: {
           ...booking,
@@ -251,6 +262,16 @@ const BookingController = {
         total_amount: newTotalAmount
       });
 
+      // Create notification for renter
+      await createNotification({
+        user_id: updatedBooking.renter_id,
+        actor_id: owner_id,
+        type: "booking_confirmed",
+        entity_type: "booking",
+        entity_id: updatedBooking.id,
+        content: `Your booking for ${booking.tool_name} was confirmed!`
+      });
+
       // Block tool availability for booking period
       await ToolAvailability.create({
         tool_id: updatedBooking.tool_id,
@@ -330,6 +351,16 @@ const BookingController = {
       const [updatedBooking] = await Booking.update(id, {
         status: "returning",
         return_initiated_at: db.fn.now(),
+      });
+
+      // Notify owner
+      await createNotification({
+        user_id: booking.owner_id,
+        actor_id: req.user.id,
+        type: "tool_returned",
+        entity_type: "booking",
+        entity_id: booking.id,
+        content: `Renter has marked ${booking.tool_name} as returned.`
       });
 
       res.status(200).json({
@@ -645,6 +676,16 @@ const BookingController = {
         new_end_date,
       });
 
+      // Notify owner
+      await createNotification({
+        user_id: booking.owner_id,
+        actor_id: renter_id,
+        type: "reschedule_requested",
+        entity_type: "booking",
+        entity_id: booking.id,
+        content: `Renter requested to reschedule ${booking.tool_name}`
+      });
+
       res.status(200).json({
         booking: updatedBooking,
         message: "Reschedule request sent to owner.",
@@ -703,6 +744,16 @@ const BookingController = {
           notes: `Booking ID ${updatedBooking.id}`,
         });
 
+        // Notify renter
+        await createNotification({
+          user_id: booking.renter_id,
+          actor_id: owner_id,
+          type: "reschedule_accepted",
+          entity_type: "booking",
+          entity_id: booking.id,
+          content: `Your reschedule request for ${booking.tool_name} was accepted.`
+        });
+
         res.status(200).json({
           booking: updatedBooking,
           message: "Reschedule request accepted and dates updated.",
@@ -713,6 +764,16 @@ const BookingController = {
           status: "confirmed",
           new_start_date: null,
           new_end_date: null,
+        });
+
+        // Notify renter
+        await createNotification({
+          user_id: booking.renter_id,
+          actor_id: owner_id,
+          type: "reschedule_declined",
+          entity_type: "booking",
+          entity_id: booking.id,
+          content: `Your reschedule request for ${booking.tool_name} was declined.`
         });
 
         res.status(200).json({
