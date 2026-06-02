@@ -11,6 +11,8 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const reviewRoutes = require("./routes/reviewRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const neighborhoodRoutes = require("./routes/neighborhoodRoutes");
 const { initSocket } = require("./socket");
 const path = require("path");
 const app = express();
@@ -52,6 +54,8 @@ app.use("/api/local-businesses", localBusinessRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/messaging", messageRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/neighborhood", neighborhoodRoutes);
 app.use("/api", reviewRoutes);
 
 server.listen(PORT, () => {

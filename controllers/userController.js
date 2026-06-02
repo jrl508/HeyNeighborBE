@@ -43,6 +43,7 @@ const registerUser = async (req, res) => {
       first_name,
       last_name,
       phone_number,
+      phone_verified: false,
       password_digest: hashedPassword,
       zip_code: zip,
       lat,
@@ -95,12 +96,15 @@ const loginUser = async (req, res) => {
       last_name,
       profile_image,
       phone_number,
+      phone_verified,
       zip_code,
       lat,
       lng,
       city,
       state,
       average_rating,
+      tools_listed_count,
+      completed_rentals_count,
     } = user;
     // Generate JWT token
     const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
@@ -117,12 +121,15 @@ const loginUser = async (req, res) => {
         last_name,
         profile_image,
         phone_number,
+        phone_verified,
         zip_code,
         lat,
         lng,
         city,
         state,
         average_rating,
+        tools_listed_count,
+        completed_rentals_count,
       },
     });
   } catch (err) {

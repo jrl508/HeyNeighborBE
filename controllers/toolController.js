@@ -156,6 +156,36 @@ const ToolController = {
     }
   },
 
+  // Get recommended tools based on user location
+  getRecommendedTools: async (req, res) => {
+    try {
+      const User = require("../models/userModel");
+      const user = await User.getUserById(req.user.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const zip = user.zip_code;
+      const radius = 10; // 10 miles
+      const limit = 6;
+      const requestingUserId = req.user.id;
+
+      // Re-using findAvailableByZip which already filters by availability and blocked users
+      const tools = await Tool.findAvailableByZip(
+        zip,
+        radius,
+        limit,
+        0,
+        requestingUserId,
+      );
+
+      res.status(200).json(tools);
+    } catch (error) {
+      console.error("Error fetching recommended tools:", error);
+      res.status(500).json({ message: "Error fetching recommended tools" });
+    }
+  },
+
   // Delete tool availability block
   deleteToolAvailability: async (req, res) => {
     try {

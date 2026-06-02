@@ -4,23 +4,38 @@ const User = {
   getUserById: async (userId) => {
     return db("users")
       .select(
-        "id",
-        "email",
-        "first_name",
-        "last_name",
-        "phone_number",
-        "zip_code",
-        "lat",
-        "lng",
-        "city",
-        "state",
-        "created_at",
-        "updated_at",
-        "profile_image",
-        "average_rating",
-        "stripe_customer_id",
+        "users.id",
+        "users.email",
+        "users.first_name",
+        "users.last_name",
+        "users.phone_number",
+        "users.phone_verified",
+        "users.zip_code",
+        "users.lat",
+        "users.lng",
+        "users.city",
+        "users.state",
+        "users.created_at",
+        "users.updated_at",
+        "users.profile_image",
+        "users.average_rating",
+        "users.stripe_customer_id",
+        db("tools")
+          .count("*")
+          .whereRaw("?? = ??", ["tools.user_id", "users.id"])
+          .as("tools_listed_count"),
+        db("bookings")
+          .count("*")
+          .where({ status: "completed" })
+          .whereRaw("(?? = ?? OR ?? = ??)", [
+            "bookings.renter_id",
+            "users.id",
+            "bookings.owner_id",
+            "users.id",
+          ])
+          .as("completed_rentals_count"),
       )
-      .where({ id: userId })
+      .where({ "users.id": userId })
       .first();
   },
 
@@ -32,7 +47,26 @@ const User = {
   },
 
   getUserByEmail: async (email) => {
-    return db("users").where({ email }).first(); // Find user by email
+    return db("users")
+      .select(
+        "users.*",
+        db("tools")
+          .count("*")
+          .whereRaw("?? = ??", ["tools.user_id", "users.id"])
+          .as("tools_listed_count"),
+        db("bookings")
+          .count("*")
+          .where({ status: "completed" })
+          .whereRaw("(?? = ?? OR ?? = ??)", [
+            "bookings.renter_id",
+            "users.id",
+            "bookings.owner_id",
+            "users.id",
+          ])
+          .as("completed_rentals_count"),
+      )
+      .where({ email })
+      .first(); // Find user by email
   },
 
   createUser: async (user) => {
@@ -50,6 +84,7 @@ const User = {
         "first_name",
         "last_name",
         "phone_number",
+        "phone_verified",
         "zip_code",
         "lat",
         "lng",
