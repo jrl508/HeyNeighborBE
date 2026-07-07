@@ -4,9 +4,13 @@ const {
   uploadProfilePic,
   getUserById,
   updateUser,
+  reverseGeocode,
 } = require("../controllers/userController");
 
 const router = express.Router();
+
+// Route for reverse geocoding
+router.get("/reverse-geocode", reverseGeocode);
 
 // Route for uploading a profile picture
 router.post(
@@ -18,3 +22,4 @@ router.get("/:id", getUserById);
 router.patch("/:id", updateUser);
 
 module.exports = router;
+

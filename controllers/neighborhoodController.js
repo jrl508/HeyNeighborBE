@@ -5,11 +5,31 @@ const db = require("../database/db");
 const getRequests = async (req, res) => {
   try {
     const user = await User.getUserById(req.user.id);
-    const { zip = user.zip_code, radius = 10, limit = 20, offset = 0 } = req.query;
+    const { zip, lat, lng, radius = 10, limit = 20, offset = 0 } = req.query;
 
-    const requests = await NeighborhoodRequest.findByLocation(zip, radius, limit, offset);
+    let location;
+    if (lat !== undefined && lng !== undefined) {
+      location = { lat: Number(lat), lng: Number(lng) };
+    } else if (zip) {
+      location = zip;
+    } else {
+      if (user) {
+        if (user.lat !== null && user.lng !== null) {
+          location = { lat: Number(user.lat), lng: Number(user.lng) };
+        } else if (user.zip_code) {
+          location = user.zip_code;
+        }
+      }
+    }
+
+    if (!location) {
+      return res.status(400).json({ message: "Location is required" });
+    }
+
+    const requests = await NeighborhoodRequest.findByLocation(location, radius, limit, offset);
     res.status(200).json(requests);
   } catch (error) {
+
     console.error("Error fetching neighborhood requests:", error);
     res.status(500).json({ message: "Server error" });
   }

@@ -31,8 +31,13 @@ const Tool = {
    * Count available tools by distance from a zip code
    */
   countAvailableByZip: async (zip, radius = 10, requestingUserId = null) => {
-    const origin = lookupZip(zip);
-    if (!origin) throw new Error("Invalid ZIP code");
+    let origin;
+    if (zip && typeof zip === "object" && zip.lat !== undefined && zip.lng !== undefined) {
+      origin = { lat: Number(zip.lat), lng: Number(zip.lng) };
+    } else {
+      origin = lookupZip(zip);
+    }
+    if (!origin || isNaN(origin.lat) || isNaN(origin.lng)) throw new Error("Invalid ZIP code or coordinates");
 
     let query = db("tools")
       .join("users", "tools.user_id", "users.id")
@@ -64,8 +69,14 @@ const Tool = {
    * Find available tools by distance from a zip code (with pagination)
    */
   findAvailableByZip: async (zip, radius = 10, limit = 20, offset = 0, requestingUserId = null) => {
-    const origin = lookupZip(zip);
-    if (!origin) throw new Error("Invalid ZIP code");
+    let origin;
+    if (zip && typeof zip === "object" && zip.lat !== undefined && zip.lng !== undefined) {
+      origin = { lat: Number(zip.lat), lng: Number(zip.lng) };
+    } else {
+      origin = lookupZip(zip);
+    }
+    if (!origin || isNaN(origin.lat) || isNaN(origin.lng)) throw new Error("Invalid ZIP code or coordinates");
+
 
     let query = db("tools")
       .join("users", "tools.user_id", "users.id")

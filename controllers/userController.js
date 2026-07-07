@@ -4,7 +4,7 @@ const User = require("../models/userModel");
 const { validationResult } = require("express-validator"); // For input validation
 const { uploadSingle } = require("../middleware/fileUploadMiddleware");
 const { use } = require("../routes/authRoutes");
-const { requireZipOrThrow } = require("../utils/zipHelper.js");
+const { requireZipOrThrow, lookupCoords } = require("../utils/zipHelper.js");
 
 // Register User
 const registerUser = async (req, res) => {
@@ -215,10 +215,30 @@ const getUserById = async (req, res) => {
   }
 };
 
+const reverseGeocode = async (req, res) => {
+  const { lat, lng } = req.query;
+  if (!lat || !lng) {
+    return res.status(400).json({ message: "Latitude and Longitude are required" });
+  }
+
+  try {
+    const info = lookupCoords(lat, lng);
+    if (!info) {
+      return res.status(404).json({ message: "No ZIP code found for these coordinates" });
+    }
+    res.status(200).json(info);
+  } catch (error) {
+    console.error("Reverse geocoding error:", error);
+    res.status(500).json({ message: "Server error during reverse geocoding" });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   uploadProfilePic,
   getUserById,
   updateUser,
+  reverseGeocode,
 };
+

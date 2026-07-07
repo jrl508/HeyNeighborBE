@@ -65,22 +65,41 @@ const ToolController = {
   // Get tools by location and radius (with pagination)
   getTools: async (req, res) => {
     try {
-      const { zip, radius, limit = 20, offset = 0 } = req.query;
-      if (!zip) {
-        return res.status(400).json({ message: "ZIP code is required" });
+      const { zip, lat, lng, radius, limit = 20, offset = 0 } = req.query;
+      let location;
+      if (lat !== undefined && lng !== undefined) {
+        location = { lat: Number(lat), lng: Number(lng) };
+      } else if (zip) {
+        location = zip;
+      } else {
+        // Fallback to user's profile location
+        const User = require("../models/userModel");
+        const user = await User.getUserById(req.user.id);
+        if (user) {
+          if (user.lat !== null && user.lng !== null) {
+            location = { lat: Number(user.lat), lng: Number(user.lng) };
+          } else if (user.zip_code) {
+            location = user.zip_code;
+          }
+        }
       }
+
+      if (!location) {
+        return res.status(400).json({ message: "Location (ZIP or coordinates) is required" });
+      }
+
       const maxDistance = radius ? Number(radius) : 10;
       const pageLimit = Math.min(Number(limit), 100); // Max 100 per page
       const pageOffset = Number(offset);
       const requestingUserId = req.user.id; // Get the ID of the user making the request
 
       // Get total count
-      const countResult = await Tool.countAvailableByZip(zip, maxDistance, requestingUserId);
+      const countResult = await Tool.countAvailableByZip(location, maxDistance, requestingUserId);
       const total = countResult[0]?.count || 0;
 
       // Get paginated results
       const tools = await Tool.findAvailableByZip(
-        zip,
+        location,
         maxDistance,
         pageLimit,
         pageOffset,
@@ -165,19 +184,23 @@ const ToolController = {
         return res.status(404).json({ message: "User not found" });
       }
 
-      const zip = user.zip_code;
+      const location = (user.lat !== null && user.lng !== null)
+        ? { lat: Number(user.lat), lng: Number(user.lng) }
+        : user.zip_code;
+        
       const radius = 10; // 10 miles
       const limit = 6;
       const requestingUserId = req.user.id;
 
       // Re-using findAvailableByZip which already filters by availability and blocked users
       const tools = await Tool.findAvailableByZip(
-        zip,
+        location,
         radius,
         limit,
         0,
         requestingUserId,
       );
+
 
       res.status(200).json(tools);
     } catch (error) {

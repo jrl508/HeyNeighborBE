@@ -45,8 +45,13 @@ const LocalBusiness = {
 
   // Search businesses by location (zip + radius)
   findByLocation: async (zip, radius = 10, limit = 20, offset = 0) => {
-    const origin = lookupZip(zip);
-    if (!origin) throw new Error("Invalid ZIP code");
+    let origin;
+    if (zip && typeof zip === "object" && zip.lat !== undefined && zip.lng !== undefined) {
+      origin = { lat: Number(zip.lat), lng: Number(zip.lng) };
+    } else {
+      origin = lookupZip(zip);
+    }
+    if (!origin || isNaN(origin.lat) || isNaN(origin.lng)) throw new Error("Invalid ZIP code or coordinates");
 
     return db("local_businesses")
       .leftJoin("users", "local_businesses.owner_id", "users.id")
@@ -84,8 +89,13 @@ const LocalBusiness = {
 
   // Count businesses by location
   countByLocation: async (zip, radius = 10) => {
-    const origin = lookupZip(zip);
-    if (!origin) throw new Error("Invalid ZIP code");
+    let origin;
+    if (zip && typeof zip === "object" && zip.lat !== undefined && zip.lng !== undefined) {
+      origin = { lat: Number(zip.lat), lng: Number(zip.lng) };
+    } else {
+      origin = lookupZip(zip);
+    }
+    if (!origin || isNaN(origin.lat) || isNaN(origin.lng)) throw new Error("Invalid ZIP code or coordinates");
 
     return db("local_businesses")
       .whereNotNull("lat")
@@ -103,6 +113,7 @@ const LocalBusiness = {
       .count("id as count")
       .first();
   },
+
 
   // Search by type
   findByType: (type, limit = 20, offset = 0) =>

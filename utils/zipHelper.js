@@ -29,3 +29,23 @@ export function requireZipOrThrow(zip) {
   if (!info) throw new Error("Invalid ZIP code");
   return info;
 }
+
+/**
+ * Lookup coordinates and return normalized object { zip, lat, lng, city, state }
+ * Returns null if not found.
+ */
+export function lookupCoords(lat, lng) {
+  if (lat === undefined || lng === undefined || lat === null || lng === null) return null;
+  
+  const info = zipcodes.lookupByCoords(Number(lat), Number(lng));
+  if (!info) return null;
+
+  return {
+    zip: info.zip,
+    lat: Number(info.latitude),
+    lng: Number(info.longitude),
+    city: info.city,
+    state: info.state,
+  };
+}
+

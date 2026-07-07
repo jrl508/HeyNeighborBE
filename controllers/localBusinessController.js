@@ -111,28 +111,45 @@ const LocalBusinessController = {
   // GET /local-businesses/search - Search by location (zip + radius)
   searchByLocation: async (req, res) => {
     try {
-      const { zip, radius, limit = 20, offset = 0 } = req.query;
-      console.log(`[GET /local-businesses/search] zip=${zip} radius=${radius}`);
+      const { zip, lat, lng, radius, limit = 20, offset = 0 } = req.query;
+      let location;
+      if (lat !== undefined && lng !== undefined) {
+        location = { lat: Number(lat), lng: Number(lng) };
+      } else if (zip) {
+        location = zip;
+      } else {
+        // Fallback to user's profile location
+        const User = require("../models/userModel");
+        const user = await User.getUserById(req.user.id);
+        if (user) {
+          if (user.lat !== null && user.lng !== null) {
+            location = { lat: Number(user.lat), lng: Number(user.lng) };
+          } else if (user.zip_code) {
+            location = user.zip_code;
+          }
+        }
+      }
 
-      if (!zip) {
+      if (!location) {
         return res
           .status(400)
-          .json({ message: "ZIP code is required for search" });
+          .json({ message: "Location (ZIP or coordinates) is required for search" });
       }
 
       const maxDistance = radius ? Number(radius) : 10;
       const pageLimit = Math.min(Number(limit), 100);
       const pageOffset = Number(offset);
 
-      const countResult = await LocalBusiness.countByLocation(zip, maxDistance);
+      const countResult = await LocalBusiness.countByLocation(location, maxDistance);
       const total = countResult?.count || 0;
 
       const businesses = await LocalBusiness.findByLocation(
-        zip,
+        location,
         maxDistance,
         pageLimit,
         pageOffset,
       );
+
 
       res.status(200).json({
         businesses,

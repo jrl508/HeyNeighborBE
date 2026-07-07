@@ -22,8 +22,13 @@ const NeighborhoodRequest = {
       .orderBy("created_at", "desc"),
 
   findByLocation: async (zip, radius = 10, limit = 20, offset = 0) => {
-    const origin = lookupZip(zip);
-    if (!origin) throw new Error("Invalid ZIP code");
+    let origin;
+    if (zip && typeof zip === "object" && zip.lat !== undefined && zip.lng !== undefined) {
+      origin = { lat: Number(zip.lat), lng: Number(zip.lng) };
+    } else {
+      origin = lookupZip(zip);
+    }
+    if (!origin || isNaN(origin.lat) || isNaN(origin.lng)) throw new Error("Invalid ZIP code or coordinates");
 
     return db("neighborhood_requests")
       .leftJoin("users", "neighborhood_requests.user_id", "users.id")
@@ -58,6 +63,7 @@ const NeighborhoodRequest = {
       .limit(limit)
       .offset(offset);
   },
+
 
   update: (id, updates) =>
     db("neighborhood_requests")
