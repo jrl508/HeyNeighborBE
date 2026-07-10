@@ -120,8 +120,30 @@ const getNeighborhoodActivity = async (req, res) => {
   }
 };
 
+const deleteRequest = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const request = await NeighborhoodRequest.findById(id);
+
+    if (!request) {
+      return res.status(404).json({ message: "Request not found" });
+    }
+
+    if (request.user_id !== req.user.id) {
+      return res.status(403).json({ message: "Not authorized to cancel this request" });
+    }
+
+    await NeighborhoodRequest.delete(id);
+    res.status(200).json({ message: "Request cancelled successfully" });
+  } catch (error) {
+    console.error("Error deleting neighborhood request:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 module.exports = {
   getRequests,
   createRequest,
   getNeighborhoodActivity,
+  deleteRequest,
 };
