@@ -1,10 +1,10 @@
-import zipcodes from "zipcodes";
+const zipcodes = require("zipcodes");
 
 /**
  * Lookup zip code and return normalized object { zip, lat, lng }
  * Returns null if not found.
  */
-export function lookupZip(zip) {
+function lookupZip(zip) {
   if (!zip) return null;
   // Accept 5-digit zips or strings with whitespace
   const normalized = String(zip).trim();
@@ -24,7 +24,7 @@ export function lookupZip(zip) {
 /**
  * Safe helper to try lookup and throw an Error when invalid.
  */
-export function requireZipOrThrow(zip) {
+function requireZipOrThrow(zip) {
   const info = lookupZip(zip);
   if (!info) throw new Error("Invalid ZIP code");
   return info;
@@ -34,7 +34,7 @@ export function requireZipOrThrow(zip) {
  * Lookup coordinates and return normalized object { zip, lat, lng, city, state }
  * Returns null if not found.
  */
-export function lookupCoords(lat, lng) {
+function lookupCoords(lat, lng) {
   if (lat === undefined || lng === undefined || lat === null || lng === null) return null;
   
   const info = zipcodes.lookupByCoords(Number(lat), Number(lng));
@@ -48,4 +48,11 @@ export function lookupCoords(lat, lng) {
     state: info.state,
   };
 }
+
+module.exports = {
+  lookupZip,
+  requireZipOrThrow,
+  lookupCoords,
+};
+
 
