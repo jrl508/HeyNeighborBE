@@ -4,7 +4,7 @@ const db = require("../database/db");
 const User = require("../models/userModel");
 
 const getDashboardStats = async (req, res) => {
-  const userId = req.user.userId;
+  const userId = req.user.id;
 
   try {
     const user = await User.getUserById(userId);
