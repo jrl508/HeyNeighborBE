@@ -54,6 +54,7 @@ const Tool = {
       );
     
     if (requestingUserId) {
+      query = query.whereNot("tools.user_id", requestingUserId);
       const blockedUserIds = (await User.getBlockingUsers(requestingUserId)).map(b => b.blocked_id);
       const blockedByMeUserIds = (await User.getBlockedByUsers(requestingUserId)).map(b => b.blocker_id);
       const allBlockedUserIds = [...new Set([...blockedUserIds, ...blockedByMeUserIds])];
@@ -93,6 +94,7 @@ const Tool = {
       );
 
     if (requestingUserId) {
+      query = query.whereNot("tools.user_id", requestingUserId);
       const blockedUserIds = (await User.getBlockingUsers(requestingUserId)).map(b => b.blocked_id);
       const blockedByMeUserIds = (await User.getBlockedByUsers(requestingUserId)).map(b => b.blocker_id);
       const allBlockedUserIds = [...new Set([...blockedUserIds, ...blockedByMeUserIds])];
