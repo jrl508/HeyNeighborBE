@@ -60,8 +60,26 @@ const createRequest = async (req, res) => {
 const getNeighborhoodActivity = async (req, res) => {
   try {
     const user = await User.getUserById(req.user.id);
-    const zip = user.zip_code;
-    const radius = 10;
+    const { zip, lat, lng, radius = 10 } = req.query;
+
+    let targetLat = user.lat;
+    let targetLng = user.lng;
+
+    if (lat !== undefined && lng !== undefined) {
+      targetLat = Number(lat);
+      targetLng = Number(lng);
+    } else if (zip) {
+      const { lookupZip } = require("../utils/zipHelper");
+      const zipInfo = lookupZip(zip);
+      if (zipInfo) {
+        targetLat = zipInfo.lat;
+        targetLng = zipInfo.lng;
+      }
+    }
+
+    if (targetLat === null || targetLng === null) {
+      return res.status(400).json({ message: "Location coordinates not found" });
+    }
 
     // Fetch recent tools
     const recentTools = await db("tools")
@@ -74,7 +92,7 @@ const getNeighborhoodActivity = async (req, res) => {
           sin(radians(?)) * sin(radians(users.lat))
         )) <= ?
         `,
-        [user.lat, user.lng, user.lat, radius],
+        [targetLat, targetLng, targetLat, Number(radius)],
       )
       .select(
         db.raw("'tool_added' as activity_type"),
@@ -85,7 +103,7 @@ const getNeighborhoodActivity = async (req, res) => {
         "users.profile_image as user_image",
       )
       .orderBy("tools.created_at", "desc")
-      .limit(10);
+      .limit(20);
 
     // Fetch recent businesses
     const recentBusinesses = await db("local_businesses")
@@ -97,7 +115,7 @@ const getNeighborhoodActivity = async (req, res) => {
           sin(radians(?)) * sin(radians(lat))
         )) <= ?
         `,
-        [user.lat, user.lng, user.lat, radius],
+        [targetLat, targetLng, targetLat, Number(radius)],
       )
       .select(
         db.raw("'business_added' as activity_type"),
@@ -106,12 +124,12 @@ const getNeighborhoodActivity = async (req, res) => {
         "created_at",
       )
       .orderBy("created_at", "desc")
-      .limit(10);
+      .limit(20);
 
     // Combine and sort
     const activity = [...recentTools, ...recentBusinesses]
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 15);
+      .slice(0, 30);
 
     res.status(200).json(activity);
   } catch (error) {
