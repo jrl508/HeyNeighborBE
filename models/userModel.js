@@ -34,6 +34,10 @@ const User = {
             "users.id",
           ])
           .as("completed_rentals_count"),
+        db("reviews")
+          .count("*")
+          .whereRaw("?? = ??", ["reviews.reviewed_id", "users.id"])
+          .as("reviews_count"),
       )
       .where({ "users.id": userId })
       .first();
@@ -64,6 +68,10 @@ const User = {
             "users.id",
           ])
           .as("completed_rentals_count"),
+        db("reviews")
+          .count("*")
+          .whereRaw("?? = ??", ["reviews.reviewed_id", "users.id"])
+          .as("reviews_count"),
       )
       .where({ email })
       .first(); // Find user by email
