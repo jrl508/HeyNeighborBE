@@ -25,13 +25,26 @@ const PORT = process.env.PORT || 3001;
 // Initialize Socket.io
 initSocket(server);
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://hey-neighbor-dev.web.app",
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: "http://localhost:3000",
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true,
   }),
 );
+
 
 // Serve the uploads folder as static
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
