@@ -32,9 +32,11 @@ const LocalBusinessController = {
       }
 
       // Get coordinates from address using zipHelper
-      // For now, use provided coordinates or default to 0,0
-      const lat = req.body.lat || 0;
-      const lng = req.body.lng || 0;
+      // Default to the recommending user's coordinates if not provided
+      const User = require("../models/userModel");
+      const user = await User.getUserById(owner_id);
+      const lat = req.body.lat || (user ? parseFloat(user.lat) : 0);
+      const lng = req.body.lng || (user ? parseFloat(user.lng) : 0);
 
       const businessData = {
         owner_id,
