@@ -186,9 +186,11 @@ const uploadProfilePic = async (req, res) => {
   }
 
   const userId = req.params.id;
-  const profileImagePath = `${req.protocol}://${req.get("host")}/uploads/${
-    req.file.filename
-  }`;
+  const filename = req.file.filename;
+  const profileImagePath = filename.startsWith("http")
+    ? filename
+    : `${req.protocol}://${req.get("host")}/uploads/${filename}`;
+
 
   try {
     const data = await User.updateUserProfilePicture(userId, profileImagePath);

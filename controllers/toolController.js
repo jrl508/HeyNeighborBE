@@ -6,9 +6,10 @@ const ToolController = {
       return res.status(400).json({ message: "No File Uploaded" });
     }
     try {
-      const toolImagePath = `${req.protocol}://${req.get("host")}/uploads/${
-        req.file.filename
-      }`;
+      const filename = req.file.filename;
+      const toolImagePath = filename.startsWith("http")
+        ? filename
+        : `${req.protocol}://${req.get("host")}/uploads/${filename}`;
       const toolData = {
         ...req.body,
         user_id: req.user.id,
@@ -38,9 +39,10 @@ const ToolController = {
 
       // If a new image was uploaded, update the image_url
       if (req.file) {
-        updates.image_url = `${req.protocol}://${req.get("host")}/uploads/${
-          req.file.filename
-        }`;
+        const filename = req.file.filename;
+        updates.image_url = filename.startsWith("http")
+          ? filename
+          : `${req.protocol}://${req.get("host")}/uploads/${filename}`;
       }
 
       const updatedTool = await Tool.update(id, updates);
