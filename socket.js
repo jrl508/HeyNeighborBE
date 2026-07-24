@@ -4,10 +4,16 @@ const User = require("./models/userModel");
 
 let io;
 
+const allowedOrigins = [
+  "http://localhost:3000",
+  "https://hey-neighbor-dev.web.app",
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 const initSocket = (server) => {
   io = new Server(server, {
     cors: {
-      origin: "http://localhost:3000",
+      origin: allowedOrigins,
       methods: ["GET", "POST"],
       credentials: true,
     },
