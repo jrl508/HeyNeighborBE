@@ -79,4 +79,11 @@ app.use("/api", reviewRoutes);
 
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
+
+  // Programmatically run database migrations on server start
+  const db = require("./database/db");
+  db.migrate
+    .latest()
+    .then(() => console.log("[Database] Migrations checked/applied successfully"))
+    .catch((err) => console.error("[Database] Migration error:", err.message));
 });
