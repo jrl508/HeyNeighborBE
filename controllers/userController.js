@@ -55,11 +55,14 @@ const registerUser = async (req, res) => {
     });
 
     // Return the user (excluding password) and a success message
-    const user = newUser[0];
-    const { password_digest, ...userWithoutPassword } = user;
+    const createdUser = Array.isArray(newUser) ? newUser[0] : newUser;
+    const { password_digest, ...userWithoutPassword } = createdUser || {};
+
+    const targetEmail = (createdUser && createdUser.email) || email;
+    const targetFirstName = (createdUser && createdUser.first_name) || first_name;
 
     // Send Welcome Email asynchronously
-    sendWelcomeEmail({ email: user.email, firstName: user.first_name }).catch((e) =>
+    sendWelcomeEmail({ email: targetEmail, firstName: targetFirstName }).catch((e) =>
       console.error("Welcome email error:", e)
     );
 

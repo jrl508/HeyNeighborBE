@@ -61,14 +61,19 @@ const sendWelcomeEmail = async ({ email, firstName }) => {
   `;
 
   try {
-    const data = await resend.emails.send({
+    console.log(`[emailUtils] Sending welcome email to: ${email}`);
+    const response = await resend.emails.send({
       from: FROM_EMAIL,
       to: [email],
       subject: "Welcome to HeyNeighbor! 🤝",
       html,
     });
-    console.log("[emailUtils] Welcome email sent:", data);
-    return data;
+    if (response.error) {
+      console.warn("[emailUtils] Resend API error sending welcome email:", response.error.message);
+    } else {
+      console.log("[emailUtils] Welcome email sent successfully:", response.data);
+    }
+    return response;
   } catch (error) {
     console.error("[emailUtils] Error sending welcome email:", error);
     return null;
@@ -129,14 +134,19 @@ const sendPasswordResetEmail = async ({ email, firstName, resetToken }) => {
   `;
 
   try {
-    const data = await resend.emails.send({
+    console.log(`[emailUtils] Sending password reset email to: ${email}`);
+    const response = await resend.emails.send({
       from: FROM_EMAIL,
       to: [email],
       subject: "Reset your HeyNeighbor Password 🔑",
       html,
     });
-    console.log("[emailUtils] Password reset email sent:", data);
-    return data;
+    if (response.error) {
+      console.warn("[emailUtils] Resend API error sending password reset email:", response.error.message);
+    } else {
+      console.log("[emailUtils] Password reset email sent successfully:", response.data);
+    }
+    return response;
   } catch (error) {
     console.error("[emailUtils] Error sending password reset email:", error);
     return null;
