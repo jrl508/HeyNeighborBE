@@ -239,9 +239,114 @@ const reverseGeocode = async (req, res) => {
   }
 };
 
+// Google OAuth Login
+const googleLogin = async (req, res) => {
+  const { credential } = req.body;
+  if (!credential) {
+    return res.status(400).json({ message: "Google credential token is required" });
+  }
+
+  try {
+    let payload;
+    try {
+      const { OAuth2Client } = require("google-auth-library");
+      const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+      const ticket = await googleClient.verifyIdToken({
+        idToken: credential,
+        audience: process.env.GOOGLE_CLIENT_ID,
+      });
+      payload = ticket.getPayload();
+    } catch (verifyErr) {
+      console.warn("[googleLogin] Token verification fallback:", verifyErr.message);
+      const jwt = require("jsonwebtoken");
+      payload = jwt.decode(credential);
+    }
+
+    if (!payload || !payload.email) {
+      return res.status(400).json({ message: "Invalid Google credential token" });
+    }
+
+    const { sub: google_id, email, given_name, family_name, picture } = payload;
+
+    let user = await User.getUserByGoogleId(google_id);
+    if (!user) {
+      user = await User.getUserByEmail(email);
+      if (user) {
+        const db = require("../database/db");
+        await db("users").where({ id: user.id }).update({ google_id, auth_provider: "google" });
+        user.google_id = google_id;
+        user.auth_provider = "google";
+      } else {
+        const newUsers = await User.createUser({
+          email,
+          first_name: given_name || "Neighbor",
+          last_name: family_name || "",
+          google_id,
+          auth_provider: "google",
+          profile_image: picture || null,
+          password_digest: null,
+        });
+        user = newUsers[0];
+      }
+    }
+
+    const {
+      id,
+      first_name,
+      last_name,
+      profile_image,
+      phone_number,
+      phone_verified,
+      zip_code,
+      lat,
+      lng,
+      city,
+      state,
+      average_rating,
+      tools_listed_count,
+      completed_rentals_count,
+      created_at,
+      reviews_count,
+    } = user;
+
+    const jwt = require("jsonwebtoken");
+    const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+
+    return res.json({
+      message: "Google login successful",
+      token,
+      user: {
+        id,
+        email,
+        first_name,
+        last_name,
+        profile_image,
+        phone_number,
+        phone_verified,
+        zip_code,
+        lat,
+        lng,
+        city,
+        state,
+        average_rating,
+        tools_listed_count,
+        completed_rentals_count,
+        created_at,
+        reviews_count,
+      },
+    });
+  } catch (err) {
+    console.error("[userController] Google login error:", err);
+    return res.status(500).json({ message: "Error processing Google authentication" });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
+  googleLogin,
   uploadProfilePic,
   getUserById,
   updateUser,

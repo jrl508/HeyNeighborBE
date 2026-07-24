@@ -77,6 +77,33 @@ const User = {
       .first(); // Find user by email
   },
 
+  getUserByGoogleId: async (googleId) => {
+    return db("users")
+      .select(
+        "users.*",
+        db("tools")
+          .count("*")
+          .whereRaw("?? = ??", ["tools.user_id", "users.id"])
+          .as("tools_listed_count"),
+        db("bookings")
+          .count("*")
+          .where({ status: "completed" })
+          .whereRaw("(?? = ?? OR ?? = ??)", [
+            "bookings.renter_id",
+            "users.id",
+            "bookings.owner_id",
+            "users.id",
+          ])
+          .as("completed_rentals_count"),
+        db("reviews")
+          .count("*")
+          .whereRaw("?? = ??", ["reviews.reviewed_id", "users.id"])
+          .as("reviews_count"),
+      )
+      .where({ google_id: googleId })
+      .first();
+  },
+
   createUser: async (user) => {
     return db("users").insert(user).returning("*"); // Insert new user into database
   },

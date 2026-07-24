@@ -6,5 +6,6 @@ const router = express.Router();
 // Routes
 router.post('/register', validateRegister, userController.registerUser);
 router.post('/login', userController.loginUser);
+router.post('/google', userController.googleLogin);
 
 module.exports = router;
