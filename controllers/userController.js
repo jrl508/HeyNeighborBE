@@ -1,9 +1,11 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../models/userModel");
+const PasswordReset = require("../models/passwordResetModel");
+const { sendWelcomeEmail, sendPasswordResetEmail } = require("../utils/emailUtils");
 const { validationResult } = require("express-validator"); // For input validation
 const { uploadSingle } = require("../middleware/fileUploadMiddleware");
-const { use } = require("../routes/authRoutes");
 const { requireZipOrThrow, lookupCoords } = require("../utils/zipHelper.js");
 
 // Register User
@@ -55,6 +57,11 @@ const registerUser = async (req, res) => {
     // Return the user (excluding password) and a success message
     const user = newUser[0];
     const { password_digest, ...userWithoutPassword } = user;
+
+    // Send Welcome Email asynchronously
+    sendWelcomeEmail({ email: user.email, firstName: user.first_name }).catch((e) =>
+      console.error("Welcome email error:", e)
+    );
 
     res.status(201).json({
       message: "User registered successfully",
@@ -287,6 +294,10 @@ const googleLogin = async (req, res) => {
           password_digest: null,
         });
         user = newUsers[0];
+
+        sendWelcomeEmail({ email: user.email, firstName: user.first_name }).catch((e) =>
+          console.error("Welcome email error (google):", e)
+        );
       }
     }
 
@@ -345,10 +356,87 @@ const googleLogin = async (req, res) => {
   }
 };
 
+// Forgot Password Handler
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: "Email is required" });
+  }
+
+  try {
+    const user = await User.getUserByEmail(email);
+    // Generic response to prevent email enumeration
+    if (!user) {
+      return res.json({
+        message: "If an account with that email exists, a password reset link has been sent.",
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    await PasswordReset.createToken({
+      userId: user.id,
+      token: resetToken,
+      expiresAt,
+    });
+
+    sendPasswordResetEmail({
+      email: user.email,
+      firstName: user.first_name,
+      resetToken,
+    }).catch((err) => console.error("Error sending reset email:", err));
+
+    return res.json({
+      message: "If an account with that email exists, a password reset link has been sent.",
+    });
+  } catch (err) {
+    console.error("[forgotPassword] Error:", err);
+    return res.status(500).json({ message: "Server error processing password reset request" });
+  }
+};
+
+// Reset Password Handler
+const resetPassword = async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: "Token and new password are required" });
+  }
+
+  if (newPassword.length < 6) {
+    return res.status(400).json({ message: "Password must be at least 6 characters" });
+  }
+
+  try {
+    const resetRecord = await PasswordReset.getValidToken(token);
+    if (!resetRecord) {
+      return res.status(400).json({ message: "Invalid or expired password reset link" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await User.updateUserProfile(resetRecord.user_id, {
+      password_digest: hashedPassword,
+    });
+
+    await PasswordReset.markAsUsed(resetRecord.id);
+
+    return res.json({
+      message: "Password updated successfully! You can now log in with your new password.",
+    });
+  } catch (err) {
+    console.error("[resetPassword] Error:", err);
+    return res.status(500).json({ message: "Server error resetting password" });
+  }
+};
+
 module.exports = {
   registerUser,
   loginUser,
   googleLogin,
+  forgotPassword,
+  resetPassword,
   uploadProfilePic,
   getUserById,
   updateUser,
