@@ -339,7 +339,9 @@ const googleLogin = async (req, res) => {
     });
   } catch (err) {
     console.error("[userController] Google login error:", err);
-    return res.status(500).json({ message: "Error processing Google authentication" });
+    return res.status(500).json({
+      message: err.message || "Error processing Google authentication",
+    });
   }
 };
 

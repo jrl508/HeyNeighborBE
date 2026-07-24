@@ -45,6 +45,12 @@ app.use(
   }),
 );
 
+// Allow Google OAuth popups to communicate via postMessage
+app.use((req, res, next) => {
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin-allow-popups");
+  next();
+});
+
 
 // Serve the uploads folder as static
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
