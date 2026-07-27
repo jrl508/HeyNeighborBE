@@ -18,20 +18,29 @@ const Message = {
     });
   },
 
-  // Find an existing conversation between participants (and optionally a booking)
+  // Find an existing conversation between participants (and optionally update booking)
   findConversation: async (participantIds, bookingId = null) => {
-    const query = db("conversation_participants as cp")
+    const normalizedIds = participantIds.map((id) => Number(id));
+    const conversation = await db("conversation_participants as cp")
       .join("conversations as c", "cp.conversation_id", "c.id")
-      .whereIn("cp.user_id", participantIds)
+      .whereIn("cp.user_id", normalizedIds)
       .groupBy("c.id")
-      .havingRaw("COUNT(DISTINCT cp.user_id) = ?", [participantIds.length])
-      .select("c.*");
+      .havingRaw("COUNT(DISTINCT cp.user_id) = ?", [normalizedIds.length])
+      .andHavingRaw(
+        "(SELECT COUNT(*) FROM conversation_participants WHERE conversation_id = c.id) = ?",
+        [normalizedIds.length]
+      )
+      .select("c.*")
+      .first();
 
-    if (bookingId) {
-      query.andWhere("c.booking_id", bookingId);
+    if (conversation && bookingId && !conversation.booking_id) {
+      await db("conversations")
+        .where({ id: conversation.id })
+        .update({ booking_id: bookingId, updated_at: db.fn.now() });
+      conversation.booking_id = bookingId;
     }
 
-    return query.first();
+    return conversation;
   },
 
   // Get all conversations for a user with last message and unread count
@@ -70,7 +79,7 @@ const Message = {
           [userId],
         ),
       )
-      .orderBy("m.created_at", "desc");
+      .orderByRaw("COALESCE(m.created_at, c.created_at) DESC");
 
     if (!includeArchived) {
       query = query.where("my_cp.archived_at", null); // Filter based on THIS user's archived_at
@@ -88,14 +97,21 @@ const Message = {
 
   // Create a message
   createMessage: async (messageData) => {
-    const [message] = await db("messages").insert(messageData).returning("*");
+    return await db.transaction(async (trx) => {
+      const [message] = await trx("messages").insert(messageData).returning("*");
 
-    // Update the conversation's updated_at timestamp
-    await db("conversations")
-      .where({ id: messageData.conversation_id })
-      .update({ updated_at: db.fn.now() });
+      // Update the conversation's updated_at timestamp
+      await trx("conversations")
+        .where({ id: messageData.conversation_id })
+        .update({ updated_at: db.fn.now() });
 
-    return message;
+      // Unarchive the conversation for all participants when a new message is sent
+      await trx("conversation_participants")
+        .where({ conversation_id: messageData.conversation_id })
+        .update({ archived_at: null });
+
+      return message;
+    });
   },
 
   // Get messages for a conversation (paginated)
