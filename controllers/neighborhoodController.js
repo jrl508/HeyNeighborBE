@@ -40,6 +40,16 @@ const createRequest = async (req, res) => {
     const user = await User.getUserById(req.user.id);
     const { tool_name, description, needed_by } = req.body;
 
+    if (!needed_by) {
+      return res.status(400).json({ message: "Needed by date is required" });
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const neededDateStr = new Date(needed_by).toISOString().split("T")[0];
+    if (neededDateStr < today) {
+      return res.status(400).json({ message: "The 'needed by' date cannot be in the past" });
+    }
+
     const [newRequest] = await NeighborhoodRequest.create({
       user_id: req.user.id,
       tool_name,
