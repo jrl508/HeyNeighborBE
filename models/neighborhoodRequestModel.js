@@ -2,6 +2,14 @@ const db = require("../database/db");
 const { lookupZip } = require("../utils/zipHelper");
 
 const NeighborhoodRequest = {
+  autoExpireRequests: async () => {
+    const today = new Date().toISOString().split("T")[0];
+    return db("neighborhood_requests")
+      .where("status", "active")
+      .andWhere("needed_by", "<", today)
+      .update({ status: "expired", updated_at: db.fn.now() });
+  },
+
   create: (requestData) => db("neighborhood_requests").insert(requestData).returning("*"),
 
   findById: (id) =>
@@ -16,12 +24,17 @@ const NeighborhoodRequest = {
       )
       .first(),
 
-  findByUserId: (userId) =>
-    db("neighborhood_requests")
+  findByUserId: async (userId) => {
+    await NeighborhoodRequest.autoExpireRequests();
+    return db("neighborhood_requests")
       .where({ user_id: userId })
-      .orderBy("created_at", "desc"),
+      .orderBy("created_at", "desc");
+  },
 
   findByLocation: async (zip, radius = 10, limit = 20, offset = 0) => {
+    await NeighborhoodRequest.autoExpireRequests();
+    const today = new Date().toISOString().split("T")[0];
+
     let origin;
     if (zip && typeof zip === "object" && zip.lat !== undefined && zip.lng !== undefined) {
       origin = { lat: Number(zip.lat), lng: Number(zip.lng) };
@@ -33,6 +46,7 @@ const NeighborhoodRequest = {
     return db("neighborhood_requests")
       .leftJoin("users", "neighborhood_requests.user_id", "users.id")
       .where("neighborhood_requests.status", "active")
+      .where("neighborhood_requests.needed_by", ">=", today)
       .whereRaw(
         `
         (3959 * acos(
@@ -63,7 +77,6 @@ const NeighborhoodRequest = {
       .limit(limit)
       .offset(offset);
   },
-
 
   update: (id, updates) =>
     db("neighborhood_requests")
