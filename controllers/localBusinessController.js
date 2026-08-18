@@ -1,6 +1,15 @@
 const LocalBusiness = require("../models/localBusinessModel");
 const { lookupZip } = require("../utils/zipHelper");
 
+const cleanPhoneDigits = (phone) => {
+  if (!phone) return "";
+  const cleaned = String(phone).replace(/\D/g, "");
+  if (cleaned.length === 11 && cleaned.startsWith("1")) {
+    return cleaned.substring(1);
+  }
+  return cleaned;
+};
+
 // Validate business data
 const validateBusinessData = (data) => {
   const errors = [];
@@ -8,8 +17,11 @@ const validateBusinessData = (data) => {
   if (!data.type || data.type.trim() === "") errors.push("Type is required");
   if (!data.address || data.address.trim() === "")
     errors.push("Address is required");
-  if (data.phone && !/^\d{3}-\d{3}-\d{4}$/.test(data.phone)) {
-    errors.push("Phone must be in format XXX-XXX-XXXX");
+  if (data.phone && data.phone.trim() !== "") {
+    const digits = cleanPhoneDigits(data.phone);
+    if (digits.length !== 10 || !/^[2-9]/.test(digits)) {
+      errors.push("Phone must be a valid 10-digit phone number");
+    }
   }
   return errors;
 };
@@ -31,6 +43,12 @@ const LocalBusinessController = {
         return res.status(400).json({ message: errors.join(", ") });
       }
 
+      let formattedPhone = null;
+      if (phone && phone.trim() !== "") {
+        const digits = cleanPhoneDigits(phone);
+        formattedPhone = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+      }
+
       // Get coordinates from address using zipHelper
       // Default to the recommending user's coordinates if not provided
       const User = require("../models/userModel");
@@ -43,7 +61,7 @@ const LocalBusinessController = {
         name: name.trim(),
         type: type.trim(),
         address: address.trim(),
-        phone: phone || null,
+        phone: formattedPhone,
         hours: hours || null,
         links: links || null,
         description: description || null,
