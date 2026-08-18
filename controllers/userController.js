@@ -157,6 +157,36 @@ const updateUser = async (req, res) => {
     const userId = req.params.id;
     let { user } = req.body;
 
+    if (!user) {
+      return res.status(400).json({ message: "User payload is required" });
+    }
+
+    // Validate and sanitize email if provided
+    if (user.email) {
+      const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+      const cleanEmail = user.email.trim().toLowerCase();
+      if (!emailRegex.test(cleanEmail)) {
+        return res.status(400).json({ message: "Invalid email format" });
+      }
+      const existingUser = await User.getUserByEmail(cleanEmail);
+      if (existingUser && String(existingUser.id) !== String(userId)) {
+        return res.status(400).json({ message: "Email already in use by another account" });
+      }
+      user.email = cleanEmail;
+    }
+
+    // Validate and sanitize phone number if provided
+    if (user.phone_number && user.phone_number.trim() !== "") {
+      let digits = String(user.phone_number).replace(/\D/g, "");
+      if (digits.length === 11 && digits.startsWith("1")) {
+        digits = digits.substring(1);
+      }
+      if (digits.length !== 10 || !/^[2-9]/.test(digits)) {
+        return res.status(400).json({ message: "Phone number must be a valid 10-digit number" });
+      }
+      user.phone_number = `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+
     // If zip_code is provided, validate and get location data
     if (user.zip_code) {
       let zipInfo;
