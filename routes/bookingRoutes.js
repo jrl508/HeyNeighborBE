@@ -43,6 +43,13 @@ router.post(
   BookingController.claimDeposit,
 );
 
+// Release security deposit hold immediately (owner action)
+router.post(
+  "/:id/release-deposit",
+  authMiddleware,
+  BookingController.releaseDeposit,
+);
+
 // Cancel a booking (requires auth)
 router.delete("/:id", authMiddleware, BookingController.cancelBooking);
 

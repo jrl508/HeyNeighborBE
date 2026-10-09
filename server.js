@@ -14,6 +14,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const dashboardRoutes = require("./routes/dashboardRoutes");
 const neighborhoodRoutes = require("./routes/neighborhoodRoutes");
 const { initSocket } = require("./socket");
+const { startDepositScheduler } = require("./utils/depositScheduler");
 const path = require("path");
 const app = express();
 const server = http.createServer(app);
@@ -24,6 +25,9 @@ const PORT = process.env.PORT || 3001;
 
 // Initialize Socket.io
 initSocket(server);
+
+// Start Deposit Auto-Release Scheduler (runs on startup & hourly)
+startDepositScheduler();
 
 const allowedOrigins = [
   "http://localhost:3000",
