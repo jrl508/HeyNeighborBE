@@ -40,12 +40,18 @@ const Booking = {
         "payments.rental_amount",
         "payments.deposit_status",
         "payments.deposit_amount",
+        "payments.renter_fee",
+        "payments.owner_commission",
+        "payments.platform_total_fee",
+        "payments.owner_payout_amount",
         "tools.name as tool_name",
         "tools.image_url as tool_image",
         db.raw("renter.first_name as renter_first_name"),
         db.raw("renter.last_name as renter_last_name"),
         db.raw("owner.first_name as owner_first_name"),
         db.raw("owner.last_name as owner_last_name"),
+        db.raw("owner.stripe_connect_account_id as owner_stripe_connect_account_id"),
+        db.raw("owner.payouts_enabled as owner_payouts_enabled"),
       )
       .orderBy("bookings.created_at", "desc"),
 

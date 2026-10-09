@@ -20,6 +20,8 @@ const User = {
         "users.profile_image",
         "users.average_rating",
         "users.stripe_customer_id",
+        "users.stripe_connect_account_id",
+        "users.payouts_enabled",
         db("tools")
           .count("*")
           .whereRaw("?? = ??", ["tools.user_id", "users.id"])
@@ -48,6 +50,17 @@ const User = {
       .where({ id: userId })
       .update({ stripe_customer_id: stripeCustomerId })
       .returning("stripe_customer_id");
+  },
+
+  updateStripeConnectAccount: async (userId, stripeConnectAccountId, payoutsEnabled = false) => {
+    return db("users")
+      .where({ id: userId })
+      .update({
+        stripe_connect_account_id: stripeConnectAccountId,
+        payouts_enabled: payoutsEnabled,
+        updated_at: db.fn.now(),
+      })
+      .returning(["id", "stripe_connect_account_id", "payouts_enabled"]);
   },
 
   getUserByEmail: async (email) => {

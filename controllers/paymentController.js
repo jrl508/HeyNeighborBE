@@ -60,22 +60,46 @@ const PaymentController = {
         console.log(`[POST /payments/intent] created new Stripe Customer: ${customerId}`);
       }
 
-      // Create two Stripe PaymentIntents associated with the customer
-      const intentRental = await stripe.paymentIntents.create({
+      // Check if owner has connected Stripe account for direct payout & platform fee deduction
+      const owner = await User.getUserById(booking.owner_id);
+      const rentalIntentParams = {
         amount: Math.round(rentalAmount * 100),
         currency: payment.currency.toLowerCase(),
         customer: customerId,
-        setup_future_usage: 'on_session', // Allow reuse of the PaymentMethod for the deposit
+        setup_future_usage: "on_session", // Allow reuse of the PaymentMethod for the deposit
         metadata: {
           booking_id: booking_id.toString(),
-          type: 'rental_fee',
+          type: "rental_fee",
           renter_id: userId.toString(),
           owner_id: booking.owner_id.toString(),
           tool_id: booking.tool_id.toString(),
+          renter_fee: payment.renter_fee ? payment.renter_fee.toString() : "0",
+          owner_commission: payment.owner_commission
+            ? payment.owner_commission.toString()
+            : "0",
+          platform_total_fee: payment.platform_total_fee
+            ? payment.platform_total_fee.toString()
+            : "0",
+          owner_payout_amount: payment.owner_payout_amount
+            ? payment.owner_payout_amount.toString()
+            : "0",
         },
         automatic_payment_methods: { enabled: true },
         capture_method: "manual",
-      });
+      };
+
+      if (owner?.stripe_connect_account_id && owner?.payouts_enabled) {
+        const platformFeeCents = Math.round(
+          parseFloat(payment.platform_total_fee || 0) * 100,
+        );
+        rentalIntentParams.application_fee_amount = platformFeeCents;
+        rentalIntentParams.transfer_data = {
+          destination: owner.stripe_connect_account_id,
+        };
+      }
+
+      // Create two Stripe PaymentIntents associated with the customer
+      const intentRental = await stripe.paymentIntents.create(rentalIntentParams);
 
       const intentDeposit = await stripe.paymentIntents.create({
         amount: Math.round(depositAmount * 100),

@@ -5,6 +5,7 @@ const Tool = require("../models/toolModel");
 const User = require("../models/userModel");
 const db = require("../database/db");
 const { createNotification } = require("../utils/notificationUtils");
+const { calculateBookingPricing } = require("../utils/pricingHelper");
 
 // Helper: Calculate days between two dates
 const calculateDays = (startDate, endDate) => {
@@ -95,13 +96,18 @@ const BookingController = {
         });
       }
 
-      // Calculate totals
+      // Calculate totals and fees using pricing helper
       const days = calculateDays(start_date, end_date);
-      const price_per_day = parseFloat(tool.rental_price_per_day);
-      const delivery_fee =
-        delivery_required && tool.deliveryAvailable ? parseFloat(tool.delivery_fee) : 0;
-      const deposit_amount = Math.ceil(price_per_day * 0.2); // 20% deposit
-      const total_amount = days * price_per_day + delivery_fee + deposit_amount;
+      const deliveryFee =
+        delivery_required && tool.deliveryAvailable
+          ? parseFloat(tool.delivery_fee)
+          : 0;
+
+      const pricing = calculateBookingPricing({
+        pricePerDay: tool.rental_price_per_day,
+        days,
+        deliveryFee,
+      });
 
       // Create booking
       const bookingData = {
@@ -110,11 +116,14 @@ const BookingController = {
         owner_id,
         start_date,
         end_date,
-        price_per_day,
-        total_amount,
+        price_per_day: pricing.dailyRate,
+        total_amount: pricing.totalAmountWithDeposit,
         delivery_required,
-        delivery_fee,
-        deposit_amount,
+        delivery_fee: pricing.deliveryFee,
+        deposit_amount: pricing.depositAmount,
+        renter_fee: pricing.renterFee,
+        owner_commission: pricing.ownerCommission,
+        payout_amount: pricing.ownerPayoutAmount,
         status: "pending_payment",
         delivery_status: delivery_required ? "requested" : "none",
       };
@@ -124,7 +133,13 @@ const BookingController = {
       // Create payment record
       const paymentData = {
         booking_id: booking.id,
-        amount: total_amount,
+        amount: pricing.totalAmountWithDeposit,
+        rental_amount: pricing.totalRentalCharge,
+        deposit_amount: pricing.depositAmount,
+        renter_fee: pricing.renterFee,
+        owner_commission: pricing.ownerCommission,
+        platform_total_fee: pricing.platformTotalFee,
+        owner_payout_amount: pricing.ownerPayoutAmount,
         currency: "USD",
         status: "requires_payment_method",
       };
@@ -225,18 +240,34 @@ const BookingController = {
 
       let rentalCaptureAmount = parseFloat(payment.rental_amount);
       let deliveryStatus = booking.delivery_status;
-      let deliveryFee = booking.delivery_fee;
+      let deliveryFee = parseFloat(booking.delivery_fee || 0);
+      let renterFee = parseFloat(payment.renter_fee || 0);
+      let ownerCommission = parseFloat(payment.owner_commission || 0);
+      let platformTotalFee = parseFloat(payment.platform_total_fee || 0);
+      let ownerPayoutAmount = parseFloat(payment.owner_payout_amount || 0);
 
-      if (booking.delivery_status === 'requested') {
-        if (deliveryDecision === 'reject') {
-          rentalCaptureAmount = rentalCaptureAmount - parseFloat(booking.delivery_fee);
-          deliveryStatus = 'rejected';
+      if (booking.delivery_status === "requested") {
+        if (deliveryDecision === "reject") {
+          deliveryStatus = "rejected";
           deliveryFee = 0;
-        } else { // 'accept'
-          deliveryStatus = 'confirmed';
+
+          const days = calculateDays(booking.start_date, booking.end_date);
+          const updatedPricing = calculateBookingPricing({
+            pricePerDay: booking.price_per_day,
+            days,
+            deliveryFee: 0,
+          });
+
+          rentalCaptureAmount = updatedPricing.totalRentalCharge;
+          renterFee = updatedPricing.renterFee;
+          ownerCommission = updatedPricing.ownerCommission;
+          platformTotalFee = updatedPricing.platformTotalFee;
+          ownerPayoutAmount = updatedPricing.ownerPayoutAmount;
+        } else {
+          deliveryStatus = "confirmed";
         }
       }
-      
+
       // Capture RENTAL payment only
       const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
       await stripe.paymentIntents.capture(payment.stripe_payment_intent_id, {
@@ -244,14 +275,17 @@ const BookingController = {
       });
 
       // Update local records
-      // Note: total_amount in booking and payment should reflect actual cost (rental + deposit hold)
-      // but here we update payment.status to 'succeeded' for the rental portion.
-      // We'll keep deposit_status as 'authorized'.
-      const newTotalAmount = rentalCaptureAmount + parseFloat(payment.deposit_amount);
-      await Payment.update(payment.id, { 
-        amount: newTotalAmount, 
+      const newTotalAmount =
+        rentalCaptureAmount + parseFloat(payment.deposit_amount || 0);
+
+      await Payment.update(payment.id, {
+        amount: newTotalAmount,
         rental_amount: rentalCaptureAmount,
-        status: 'succeeded' 
+        renter_fee: renterFee,
+        owner_commission: ownerCommission,
+        platform_total_fee: platformTotalFee,
+        owner_payout_amount: ownerPayoutAmount,
+        status: "succeeded",
       });
 
       const [updatedBooking] = await Booking.update(id, {
@@ -259,7 +293,10 @@ const BookingController = {
         confirmed_at: db.fn.now(),
         delivery_status: deliveryStatus,
         delivery_fee: deliveryFee,
-        total_amount: newTotalAmount
+        renter_fee: renterFee,
+        owner_commission: ownerCommission,
+        payout_amount: ownerPayoutAmount,
+        total_amount: newTotalAmount,
       });
 
       // Create notification for renter
@@ -488,6 +525,47 @@ const BookingController = {
     } catch (error) {
       console.error("Error claiming deposit:", error);
       res.status(500).json({ message: "Error claiming deposit", error: error.message });
+    }
+  },
+
+  // POST /api/bookings/:id/release-deposit - Owner manually releases the security deposit hold immediately
+  releaseDeposit: async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+
+      const booking = await Booking.findById(id);
+      if (!booking) return res.status(404).json({ message: "Booking not found" });
+
+      if (booking.owner_id !== userId) {
+        return res.status(403).json({ message: "Unauthorized: only the owner can release the deposit" });
+      }
+
+      const payment = await Payment.findByBookingId(id);
+      if (!payment || payment.deposit_status !== "authorized") {
+        return res.status(400).json({ message: "No active deposit authorization found to release" });
+      }
+
+      if (payment.stripe_deposit_intent_id) {
+        const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+        try {
+          await stripe.paymentIntents.cancel(payment.stripe_deposit_intent_id);
+        } catch (stripeErr) {
+          if (!stripeErr.message.includes("already been canceled")) {
+            throw stripeErr;
+          }
+        }
+      }
+
+      await Payment.updateDepositStatus(payment.id, "released");
+
+      res.status(200).json({
+        message: "Security deposit hold released successfully.",
+        deposit_status: "released",
+      });
+    } catch (error) {
+      console.error("Error releasing deposit:", error);
+      res.status(500).json({ message: "Error releasing deposit", error: error.message });
     }
   },
 
